@@ -169,8 +169,8 @@ static void *worker_thread_function(void *arg) {
             // 任务成功出队
             TPOOL_LOG("工作线程 #%d (线程池 %p): 出队任务 '%s'。", thread_id, (void*)pool, current_task_data->task_name);
             // 更新此线程的正在运行的任务名称
-            strncpy(pool->running_task_names[thread_id], current_task_data->task_name, MAX_TASK_NAME_LEN -1);
-            pool->running_task_names[thread_id][MAX_TASK_NAME_LEN - 1] = '\0'; // 确保空终止
+            snprintf(pool->running_task_names[thread_id], MAX_TASK_NAME_LEN, "%s", current_task_data->task_name);
+            // snprintf 会自动添加空终止符
             
             pthread_mutex_unlock(&(pool->lock)); // 执行任务前解锁
             TPOOL_LOG("工作线程 #%d (线程池 %p): 已解锁池，开始任务 '%s'。", thread_id, (void*)pool, current_task_data->task_name);
