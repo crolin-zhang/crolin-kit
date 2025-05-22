@@ -33,19 +33,28 @@
 ### 项目结构
 
 ```
-thread/
-├── CMakeLists.txt        # 主CMake构建文件
-├── include/
-│   └── thread.h         # 公共API头文件
-├── src/
-│   ├── thread.c         # 线程池实现
-│   └── thread_internal.h # 内部结构和函数声明
-├── tests/
+/
+├── CMakeLists.txt        # 顶层CMake构建文件
+├── thread/               # 线程池库核心实现
+│   ├── CMakeLists.txt    # 线程池库构建文件
+│   ├── include/
+│   │   └── thread.h         # 公共API头文件
+│   └── src/
+│       ├── thread.c         # 线程池实现
+│       └── thread_internal.h # 内部结构和函数声明
+├── tests/                # 测试目录
 │   ├── CMakeLists.txt    # 测试构建文件
 │   └── test_thread_pool.c # 测试程序
-└── examples/
-    ├── CMakeLists.txt    # 示例构建文件
-    └── thread_pool_example.c # 示例程序
+├── examples/             # 示例目录
+│   ├── CMakeLists.txt    # 示例构建文件
+│   └── thread_pool_example.c # 示例程序
+└── docs/                 # 文档目录
+    ├── README.md          # 文档目录概述
+    ├── project_overview.md # 项目概述
+    ├── architecture.md     # 架构设计
+    ├── api_reference.md    # API参考
+    ├── user_guide.md       # 用户指南
+    └── test_report.md      # 测试报告
 ```
 
 ## 使用场景

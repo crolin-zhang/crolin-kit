@@ -22,16 +22,28 @@
 ## 项目结构
 
 ```
-thread/
-├── CMakeLists.txt        # 主CMake构建文件
-├── include/
-│   └── thread.h         # 公共API头文件
-├── src/
-│   ├── thread.c         # 线程池实现
-│   └── thread_internal.h # 内部结构和函数声明
-└── tests/
-    ├── CMakeLists.txt    # 测试构建文件
-    └── test_thread_pool.c # 测试程序
+/
+├── CMakeLists.txt        # 顶层CMake构建文件
+├── thread/               # 线程池库核心实现
+│   ├── CMakeLists.txt    # 线程池库构建文件
+│   ├── include/
+│   │   └── thread.h         # 公共API头文件
+│   └── src/
+│       ├── thread.c         # 线程池实现
+│       └── thread_internal.h # 内部结构和函数声明
+├── tests/                # 测试目录
+│   ├── CMakeLists.txt    # 测试构建文件
+│   └── test_thread_pool.c # 测试程序
+├── examples/             # 示例目录
+│   ├── CMakeLists.txt    # 示例构建文件
+│   └── thread_pool_example.c # 示例程序
+└── docs/                 # 文档目录
+    ├── README.md          # 文档目录概述
+    ├── project_overview.md # 项目概述
+    ├── architecture.md     # 架构设计
+    ├── api_reference.md    # API参考
+    ├── user_guide.md       # 用户指南
+    └── test_report.md      # 测试报告
 ```
 
 ## 快速开始
@@ -53,10 +65,10 @@ cmake .. -DBUILD_TESTS=ON -DBUILD_EXAMPLES=ON
 make
 
 # 运行测试程序
-./thread/tests/test_thread_pool
+./tests/test_thread_pool
 
 # 运行示例程序
-./thread/examples/thread_pool_example
+./examples/thread_pool_example
 ```
 
 ### 安装
@@ -73,7 +85,7 @@ sudo make install
 如果你想将线程池库作为子目录集成到其他CMake项目中，可以在主项目的CMakeLists.txt中添加：
 
 ```cmake
-add_subdirectory(path/to/thread)
+add_subdirectory(path/to/thread_pool_library)
 target_link_libraries(your_target PRIVATE thread)
 ```
 
