@@ -1,4 +1,5 @@
 add_subdirectory(thread)
+add_subdirectory(log)
 
 add_executable(thread_pool_example thread_pool_example.c)
 target_link_libraries(thread_pool_example PRIVATE thread)
