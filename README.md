@@ -1,10 +1,10 @@
-# C线程池库 (C Thread Pool Library)
+# CrolinKit - 嵌入式系统开发工具包
 
 [![Language](https://img.shields.io/badge/Language-C-blue.svg)](https://en.wikipedia.org/wiki/C_(programming_language))
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![AI-Assisted](https://img.shields.io/badge/AI--Assisted-100%25-purple.svg)](https://github.com/crolin-zhang/crolin-zhang)
+[![AI-Assisted](https://img.shields.io/badge/AI--Assisted-100%25-purple.svg)](https://github.com/crolin-zhang/crolin-kit.git)
 
-一个高性能、可靠的C语言线程池库，提供简洁的API接口，使开发者能够轻松地在应用程序中实现并发任务处理。该库已重构为符合IPC SDK结构的模块化设计。
+CrolinKit 是一个为嵌入式系统设计的多功能开发工具包，提供了一系列模块化的组件，包括线程池、日志系统等。该工具包支持交叉编译，可以在各种嵌入式平台上运行。
 
 > **注意**：这是一个完全借助AI（人工智能）进行开发的项目，从设计、编码到测试和文档编写，全过程由AI辅助完成。项目展示了AI辅助开发的能力和潜力。
 
@@ -23,27 +23,109 @@
 
 ```
 /
-├── CMakeLists.txt        # 顶层CMake构建文件
-├── thread/               # 线程池库核心实现
-│   ├── CMakeLists.txt    # 线程池库构建文件
-│   ├── include/
-│   │   └── thread.h         # 公共API头文件
-│   └── src/
-│       ├── thread.c         # 线程池实现
-│       └── thread_internal.h # 内部结构和函数声明
-├── tests/                # 测试目录
-│   ├── CMakeLists.txt    # 测试构建文件
-│   └── test_thread_pool.c # 测试程序
-├── examples/             # 示例目录
-│   ├── CMakeLists.txt    # 示例构建文件
-│   └── thread_pool_example.c # 示例程序
-└── docs/                 # 文档目录
-    ├── README.md          # 文档目录概述
-    ├── project_overview.md # 项目概述
-    ├── architecture.md     # 架构设计
-    ├── api_reference.md    # API参考
-    ├── user_guide.md       # 用户指南
-    └── test_report.md      # 测试报告
+├─ CMakeLists.txt        # 顶层CMake构建文件
+├─ .gitignore            # Git忽略文件
+├─ cmake/                # CMake相关文件
+│   ├─ templates/         # 模板文件
+│   │   └─ version.h.in    # 版本头文件模板
+│   └─ toolchains/        # 交叉编译工具链
+│       └─ mips-linux-gnu.cmake # MIPS交叉编译工具链
+├─ src/                  # 源代码目录
+│   ├─ CMakeLists.txt    # 源代码构建文件
+│   └─ core/              # 核心模块目录
+│       ├─ CMakeLists.txt  # 核心模块构建文件
+│       └─ thread/          # 线程模块
+│           ├─ CMakeLists.txt # 线程模块构建文件
+│           ├─ include/       # 公共API头文件目录
+│           │   └─ thread.h    # 线程池API头文件
+│           └─ src/           # 源代码目录
+│               ├─ thread.c    # 线程池实现
+│               └─ thread_internal.h # 内部结构和函数声明
+├─ tools/                # 工具目录
+│   └─ CMakeLists.txt    # 工具构建文件
+├─ tests/                # 测试目录
+│   ├─ CMakeLists.txt    # 测试构建文件
+│   ├─ test_thread_pool.c # 测试程序
+│   └─ modules/           # 模块测试目录
+│       ├─ CMakeLists.txt  # 模块测试构建文件
+│       └─ thread/          # 线程模块测试
+│           ├─ CMakeLists.txt # 线程模块测试构建文件
+│           └─ src/           # 线程模块测试源代码
+│               ├─ CMakeLists.txt # 测试源代码构建文件
+│               └─ thread_unit_test.c # 线程模块单元测试
+├─ examples/             # 示例目录
+│   ├─ CMakeLists.txt    # 示例构建文件
+│   ├─ thread_pool_example.c # 示例程序
+│   └─ thread/            # 线程模块示例
+│       ├─ CMakeLists.txt  # 线程模块示例构建文件
+│       └─ thread_example.c # 线程模块示例程序
+├─ tools/                # 工具目录
+│   ├─ CMakeLists.txt    # 工具构建文件
+│   └─ build/             # 构建工具
+│       ├─ CMakeLists.txt  # 构建工具构建文件
+│       └─ version_template.h.in # 版本信息模板
+├─ cmake/                # CMake模块目录
+│   └─ toolchains/         # 交叉编译工具链目录
+│       └─ mips-linux-gnu.cmake # MIPS交叉编译工具链配置
+└─ docs/                 # 文档目录
+    ├─ README.md          # 文档目录概述
+    ├─ project_overview.md # 项目概述
+    ├─ architecture.md     # 架构设计
+    ├─ api_reference.md    # API参考
+    ├─ user_guide.md       # 用户指南
+    └─ test_report.md      # 测试报告
+```
+
+## 构建和安装
+
+### 前提条件
+
+- CMake 3.8 或更高版本
+- C 编译器 (GCC 或 Clang)
+- POSIX 线程支持 (pthread)
+
+### 构建步骤
+
+```bash
+# 克隆仓库
+git clone https://github.com/crolin-zhang/crolin-kit.git
+cd crolin-kit
+
+# 创建构建目录
+mkdir build
+cd build
+
+# 配置和构建
+cmake ..
+make
+
+# 运行测试
+make test
+
+# 安装 (默认安装到build/install目录)
+make install
+```
+
+默认情况下，库将被安装到 `build/install` 目录下。安装后的目录结构如下：
+
+```
+build/install/
+├─ include/           # 头文件目录
+│   ├─ thread.h       # 线程池API头文件
+│   └─ version.h      # 版本信息头文件
+└─ lib/               # 库文件目录
+    ├─ cmake/           # CMake配置文件
+    │   └─ CrolinKit/    # 项目配置
+    │       ├─ CrolinKitTargets.cmake
+    │       └─ CrolinKitTargets-noconfig.cmake
+    └─ libthread.a     # 线程池库
+```
+
+如果你想安装到系统目录，可以使用：
+
+```bash
+cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..
+make install
 ```
 
 ## 快速开始
@@ -51,6 +133,8 @@
 ### 编译与运行
 
 使用CMake构建系统：
+
+#### 本地编译
 
 ```bash
 # 在项目根目录下创建构建目录
@@ -67,8 +151,31 @@ make
 # 运行测试程序
 ./tests/test_thread_pool
 
+# 运行模块测试
+./tests/modules/thread/src/thread_unit_test
+
 # 运行示例程序
 ./examples/thread_pool_example
+./examples/thread/thread_example
+```
+
+#### 交叉编译（以MIPS为例）
+
+```bash
+# 在项目根目录下创建构建目录
+mkdir -p build-mips && cd build-mips
+
+# 使用MIPS交叉编译工具链配置
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchains/mips-linux-gnu.cmake
+
+# 构建库
+make
+
+# 或者，指定编译器路径
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchains/mips-linux-gnu.cmake \
+         -DCMAKE_C_COMPILER=/path/to/mips-linux-gnu-gcc \
+         -DCMAKE_CXX_COMPILER=/path/to/mips-linux-gnu-g++
+make
 ```
 
 ### 安装
@@ -82,17 +189,35 @@ sudo make install
 
 ### 与其他项目集成
 
-如果你想将线程池库作为子目录集成到其他CMake项目中，可以在主项目的CMakeLists.txt中添加：
+如果你想将CrolinKit作为子目录集成到其他CMake项目中，可以在主项目的CMakeLists.txt中添加：
 
 ```cmake
-add_subdirectory(path/to/thread_pool_library)
+# 添加CrolinKit目录
+add_subdirectory(path/to/crolin-kit)
+
+# 链接线程模块
 target_link_libraries(your_target PRIVATE thread)
+
+# 包含头文件目录
+target_include_directories(your_target PRIVATE 
+    ${path/to/crolin-kit}/src/core/thread/include
+)
+```
+
+或者，如果你已经安装了CrolinKit，可以使用find_package：
+
+```cmake
+# 查找CrolinKit包
+find_package(CrolinKit REQUIRED)
+
+# 链接线程模块
+target_link_libraries(your_target PRIVATE CrolinKit::thread)
 ```
 
 ### 基本用法
 
 ```c
-#include "thread.h"
+#include "crolinkit/core/thread/thread.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -123,6 +248,15 @@ int main() {
             fprintf(stderr, "添加任务失败\n");
             free(arg);
         }
+    }
+    
+    // 获取当前正在执行的任务名称
+    char **tasks = thread_pool_get_running_task_names(pool);
+    if (tasks != NULL) {
+        for (int i = 0; i < 4; i++) {
+            printf("线程 %d: %s\n", i, tasks[i]);
+        }
+        thread_pool_free_task_names(tasks);
     }
     
     // 等待任务完成（简化示例）
@@ -179,16 +313,32 @@ int thread_pool_destroy(thread_pool_t pool);
 
 ## 开发计划
 
+### 已完成
+
 - [x] 基础线程池功能实现
 - [x] 任务队列管理
 - [x] 线程同步机制
 - [x] 任务状态监控
-- [x] 重构为符合IPC SDK的目录结构
+- [x] 重构为模块化目录结构
 - [x] 添加测试套件
+- [x] 交叉编译支持
+- [x] 多模块开发支持
+
+### 进行中
+
+- [ ] 完善单元测试覆盖率
+- [ ] 性能基准测试
+- [ ] 内存泄漏检测
+
+### 计划中
+
 - [ ] 任务优先级支持
 - [ ] 任务完成通知机制
 - [ ] 动态调整线程池大小
 - [ ] 性能监控与统计
+- [ ] 日志模块集成
+- [ ] 内存管理模块集成
+- [ ] IPC模块集成
 
 ## 贡献
 
