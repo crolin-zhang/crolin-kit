@@ -14,7 +14,7 @@
 #include <stdlib.h>     // 用于标准库函数 (malloc, free, srand, exit)
 #include <unistd.h>     // 用于 POSIX 操作系统 API (sleep)
 #include <time.h>       // 用于时间相关函数 (time, 用于 srand 初始化)
-#include "../include/thread.h"     // 线程池库的头文件
+#include "thread.h"     // 线程池库的头文件
 
 #define NUM_THREADS 4   // 定义工作线程的数量
 #define NUM_TASKS 10    // 定义要添加到池中的任务数量
