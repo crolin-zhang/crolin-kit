@@ -15,9 +15,12 @@ CrolinKit 是一个为嵌入式系统设计的多功能开发工具包，提供�
 - **任务状态监控** - 支持查询当前正在执行的任务
 - **线程安全** - 使用互斥锁和条件变量确保线程安全
 - **详细的错误处理** - 提供全面的错误检查和日志记录
+- **多级别日志系统** - 支持ERROR、WARNING、INFO、DEBUG、TRACE多级别日志
+- **日志文件轮转** - 基于大小和时间的日志文件轮转功能
 - **内存管理** - 细致的内存分配与释放，防止内存泄漏
 - **模块化设计** - 符合IPC SDK的目录结构，易于集成
 - **完整测试套件** - 包含验证功能正确性的测试程序
+- **交叉编译支持** - 支持MIPS等多种嵌入式平台
 
 ## 项目结构
 
@@ -217,7 +220,7 @@ target_link_libraries(your_target PRIVATE CrolinKit::thread)
 ### 基本用法
 
 ```c
-#include "crolinkit/core/thread/thread.h"
+#include "thread.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -256,7 +259,7 @@ int main() {
         for (int i = 0; i < 4; i++) {
             printf("线程 %d: %s\n", i, tasks[i]);
         }
-        thread_pool_free_task_names(tasks);
+        free_running_task_names(tasks, 4);
     }
     
     // 等待任务完成（简化示例）
@@ -323,22 +326,25 @@ int thread_pool_destroy(thread_pool_t pool);
 - [x] 添加测试套件
 - [x] 交叉编译支持
 - [x] 多模块开发支持
+- [x] 日志模块实现
+- [x] 线程模块与日志模块集成
 
 ### 进行中
 
+- [ ] 内存管理模块设计与实现
+- [ ] 日志模块功能增强
 - [ ] 完善单元测试覆盖率
 - [ ] 性能基准测试
-- [ ] 内存泄漏检测
 
 ### 计划中
 
+- [ ] 内存泄漏检测
 - [ ] 任务优先级支持
 - [ ] 任务完成通知机制
 - [ ] 动态调整线程池大小
 - [ ] 性能监控与统计
-- [ ] 日志模块集成
-- [ ] 内存管理模块集成
-- [ ] IPC模块集成
+- [ ] IPC（进程间通信）模块
+- [ ] 网络通信模块
 
 ## 贡献
 
