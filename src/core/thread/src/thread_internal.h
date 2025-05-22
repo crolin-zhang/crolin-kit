@@ -9,6 +9,7 @@
 #define THREAD_INTERNAL_H
 
 #include "../include/thread.h"
+// log.h 已在 thread.h 中包含
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>

@@ -219,6 +219,13 @@ static void *worker_thread_function(void *arg) {
  *         错误时返回 NULL (例如，内存分配失败，无效参数)。
  */
 thread_pool_t thread_pool_create(int num_threads) {
+    // 确保日志模块已初始化
+    static int log_initialized = 0;
+    if (!log_initialized) {
+        log_init("thread_pool.log", LOG_LEVEL_INFO);
+        log_initialized = 1;
+    }
+    
     TPOOL_LOG("尝试创建包含 %d 个线程的线程池。", num_threads);
     if (num_threads <= 0) {
         TPOOL_ERROR("线程数必须为正。请求数: %d", num_threads);
@@ -362,7 +369,8 @@ thread_pool_t thread_pool_create(int num_threads) {
  */
 int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg, const char *task_name) {
     if (pool == NULL || function == NULL) {
-        TPOOL_ERROR("thread_pool_add_task: 池 (%p) 或函数指针 (%p) 为 NULL。", (void*)pool, (void*)function);
+        // 不将函数指针转换为 void*，避免警告
+        TPOOL_ERROR("thread_pool_add_task: 池 (%p) 或函数指针为 NULL。", (void*)pool);
         return -1;
     }
 
@@ -462,11 +470,14 @@ int thread_pool_destroy(thread_pool_t pool) {
     pthread_mutex_destroy(&(pool->lock));
     pthread_cond_destroy(&(pool->notify));
     
+    // 在释放池之前记录日志，避免释放后使用
+    TPOOL_LOG("线程池 (%p) 即将销毁。", (void*)pool);
+    
     // 释放线程数组和池结构本身
     free(pool->threads);
     free(pool); // 释放 struct thread_pool_s
-
-    TPOOL_LOG("线程池 (原地址 %p) 已成功销毁。", (void*)pool); // 注意：pool 指针现在无效
+    
+    // 注意：我们不在这里关闭日志模块，因为其他模块可能仍在使用它
     return 0;
 }
 
@@ -494,7 +505,6 @@ char **thread_pool_get_running_task_names(thread_pool_t pool) {
     char **task_names_copy = (char **)malloc(sizeof(char *) * pool->thread_count);
     if (task_names_copy == NULL) {
         TPOOL_ERROR("未能为任务名称数组副本分配内存 (线程池 %p)。", (void*)pool);
-        // perror("malloc for task_names_copy");
         return NULL;
     }
 
@@ -503,7 +513,6 @@ char **thread_pool_get_running_task_names(thread_pool_t pool) {
         task_names_copy[i] = (char *)malloc(MAX_TASK_NAME_LEN);
         if (task_names_copy[i] == NULL) {
             TPOOL_ERROR("未能为任务名称字符串副本 #%d 分配内存 (线程池 %p)。", i, (void*)pool);
-            // perror("malloc for task_names_copy[i]");
             // 清理此数组副本中先前分配的字符串
             for (int j = 0; j < i; ++j) free(task_names_copy[j]);
             free(task_names_copy); // 释放数组本身
