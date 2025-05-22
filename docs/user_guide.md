@@ -48,7 +48,7 @@ gcc -c -Wall -pthread -o thread.o thread/src/thread.c -Ithread/include
 ar rcs libthread.a thread.o
 
 # 编译示例程序
-gcc -Wall -pthread -o thread_pool_example thread/examples/thread_pool_example.c libthread.a -Ithread/include
+gcc -Wall -pthread -o thread_pool_example examples/thread_pool_example.c libthread.a -Ithread/include
 ```
 
 ### 安装库

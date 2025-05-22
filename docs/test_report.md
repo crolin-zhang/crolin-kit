@@ -56,7 +56,7 @@
 
 ## 测试实现
 
-测试代码位于`thread/tests/test_thread_pool.c`文件中，实现了上述测试用例。以下是主要测试函数的概述：
+测试代码位于`tests/test_thread_pool.c`文件中，实现了上述测试用例。以下是主要测试函数的概述：
 
 ### 基本功能测试
 
@@ -165,7 +165,7 @@ void test_error_handling() {
    $ make
    
    # 运行性能测试
-   $ ./thread/benchmarks/thread_pool_benchmark
+   $ ./benchmarks/thread_pool_benchmark
    ```
 
 2. **负载测试**
@@ -174,7 +174,7 @@ void test_error_handling() {
 
    ```bash
    # 高负载测试（添加10000个任务）
-   $ ./thread/tests/test_thread_pool --high-load --tasks=10000
+   $ ./tests/test_thread_pool --high-load --tasks=10000
    ```
 
 3. **内存使用监控**
@@ -182,7 +182,7 @@ void test_error_handling() {
    我们使用`massif`工具来监控线程池的内存使用情况：
 
    ```bash
-   $ valgrind --tool=massif ./thread/tests/test_thread_pool --high-load
+   $ valgrind --tool=massif ./tests/test_thread_pool --high-load
    $ ms_print massif.out.12345 > memory_profile.txt
    ```
 
@@ -191,7 +191,7 @@ void test_error_handling() {
    我们使用`perf`工具来分析CPU使用情况：
 
    ```bash
-   $ perf record -g ./thread/tests/test_thread_pool --high-load
+   $ perf record -g ./tests/test_thread_pool --high-load
    $ perf report
    ```
 
@@ -227,7 +227,7 @@ $ cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
 $ make
 
 # 使用Valgrind运行测试程序
-$ valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose ./thread/tests/test_thread_pool
+$ valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose ./tests/test_thread_pool
 ```
 
 ### 检测结果
@@ -250,14 +250,14 @@ $ valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose
    # 编译时启用ASan
    $ cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DCMAKE_C_FLAGS="-fsanitize=address -g"
    $ make
-   $ ./thread/tests/test_thread_pool
+   $ ./tests/test_thread_pool
    ```
 
 2. **Electric Fence**
 
    ```bash
    # 使用Electric Fence运行测试
-   $ LD_PRELOAD=/usr/lib/libefence.so ./thread/tests/test_thread_pool
+   $ LD_PRELOAD=/usr/lib/libefence.so ./tests/test_thread_pool
    ```
 
 ## 测试覆盖率
@@ -273,7 +273,7 @@ $ cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DCMAKE_C_FLAGS="--coverage
 $ make
 
 # 运行测试程序
-$ ./thread/tests/test_thread_pool
+$ ./tests/test_thread_pool
 
 # 使用gcov生成覆盖率数据
 $ cd thread/src
