@@ -20,29 +20,24 @@
  */
 #define MAX_TASK_NAME_LEN 64
 
-// 日志宏 (条件编译)
-#ifdef DEBUG_THREAD_POOL
-#include <stdio.h> // 用于 fprintf, 日志宏使用。
+// 日志宏 (使用日志模块)
+#include "log.h" // 包含日志模块的头文件
+
 /**
  * @def TPOOL_LOG
  * @brief 用于一般日志消息的宏。
  *
- * 仅当定义了 DEBUG_THREAD_POOL 时激活。打印到 stderr。
- * 在消息前添加 "[THREAD_POOL_LOG]"。
+ * 使用日志模块的 LOG_INFO 函数记录日志。
  */
-#define TPOOL_LOG(fmt, ...) fprintf(stderr, "[THREAD_POOL_LOG] " fmt "\n", ##__VA_ARGS__)
+#define TPOOL_LOG(fmt, ...) LOG_INFO(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
+
 /**
  * @def TPOOL_ERROR
  * @brief 用于错误日志消息的宏。
  *
- * 仅当定义了 DEBUG_THREAD_POOL 时激活。打印到 stderr。
- * 在消息前添加 "[THREAD_POOL_ERROR] (file:line)"。
+ * 使用日志模块的 LOG_ERROR 函数记录错误日志。
  */
-#define TPOOL_ERROR(fmt, ...) fprintf(stderr, "[THREAD_POOL_ERROR] (%s:%d) " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
-#else
-#define TPOOL_LOG(fmt, ...)  // 如果未定义 DEBUG_THREAD_POOL 则禁用
-#define TPOOL_ERROR(fmt, ...) // 如果未定义 DEBUG_THREAD_POOL 则禁用
-#endif
+#define TPOOL_ERROR(fmt, ...) LOG_ERROR(LOG_MODULE_THREAD, "(%s:%d) " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
 /**
  * @struct task_t

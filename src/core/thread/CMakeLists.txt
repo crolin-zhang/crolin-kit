@@ -5,11 +5,12 @@ add_library(thread STATIC src/thread.c)
 target_include_directories(thread PUBLIC 
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-    PRIVATE src)
+    PRIVATE src
+    ${CMAKE_SOURCE_DIR}/src/core/log/include)
 
 # 查找并链接系统线程库
 find_package(Threads REQUIRED)
-target_link_libraries(thread PUBLIC Threads::Threads)
+target_link_libraries(thread PUBLIC Threads::Threads log)
 
 # 安装库文件和头文件
 install(TARGETS thread EXPORT CrolinKitTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
