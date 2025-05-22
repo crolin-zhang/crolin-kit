@@ -9,3 +9,15 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # 添加线程池子目录
 add_subdirectory(thread)
+
+# 添加测试目录
+option(BUILD_TESTS "Build the tests" ON)
+if(BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
+
+# 添加示例目录
+option(BUILD_EXAMPLES "Build the examples" ON)
+if(BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()

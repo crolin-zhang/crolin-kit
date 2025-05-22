@@ -44,16 +44,4 @@ install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
 
-# 添加测试（可选）
-option(BUILD_TESTS "Build tests" OFF)
-if(BUILD_TESTS)
-    # 添加测试目录
-    add_subdirectory(tests)
-endif()
-
-# 添加示例（可选）
-option(BUILD_EXAMPLES "Build examples" OFF)
-if(BUILD_EXAMPLES)
-    # 添加示例目录
-    add_subdirectory(examples)
-endif()
+# 注意：测试和示例已移动到顶层目录
