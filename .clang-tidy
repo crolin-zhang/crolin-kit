@@ -1,0 +1,82 @@
+---
+# CrolinKit 项目的 clang-tidy 配置
+
+# 启用的检查器
+Checks: >
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -modernize-use-trailing-return-type,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-avoid-c-arrays,
+  -modernize-avoid-c-arrays,
+  -cert-err33-c,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -readability-function-size,
+  -readability-function-cognitive-complexity
+
+# 警告作为错误
+WarningsAsErrors: ''
+
+# 头文件过滤器
+HeaderFilterRegex: '.*'
+
+# 格式化风格
+FormatStyle: file
+
+# 用户宏
+CheckOptions:
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-function-size.LineThreshold
+    value: '100'
+  - key: readability-function-size.ParameterThreshold
+    value: '5'
+  - key: readability-function-size.StatementThreshold
+    value: '50'
+  - key: bugprone-argument-comment.StrictMode
+    value: '1'
+  - key: bugprone-sizeof-expression.WarnOnSizeOfConstant
+    value: '1'
+  - key: bugprone-sizeof-expression.WarnOnSizeOfIntegerExpression
+    value: '1'
+  - key: bugprone-misplaced-widening-cast.CheckImplicitCasts
+    value: '1'
+  - key: bugprone-suspicious-string-compare.WarnOnImplicitComparison
+    value: '1'
+  - key: bugprone-suspicious-string-compare.WarnOnLogicalNotComparison
+    value: '1'
+  - key: cert-str34-c.DiagnoseSignedUnsignedCharComparisons
+    value: '1'
+  - key: cppcoreguidelines-narrowing-conversions.WarnOnFloatingPointNarrowingConversion
+    value: '1'
+  - key: misc-throw-by-value-catch-by-reference.WarnOnLargeObject
+    value: '1'
+  - key: readability-simplify-boolean-expr.ChainedConditionalReturn
+    value: '1'
+  - key: readability-simplify-boolean-expr.ChainedConditionalAssignment
+    value: '1'
+  - key: readability-uniqueptr-delete-release.PreferResetCall
+    value: '1'
+  - key: readability-else-after-return.WarnOnConditionVariables
+    value: '1'
+  - key: readability-else-after-return.WarnOnUnfixable
+    value: '1'
+---

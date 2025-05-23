@@ -1,0 +1,105 @@
+---
+# CrolinKit 项目的 clang-format 配置
+# 基于项目现有代码风格创建
+
+# 语言: C
+Language: Cpp
+
+# 基本格式设置
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+
+# 大括号风格 (K&R风格)
+BreakBeforeBraces: Linux
+BraceWrapping:
+  AfterFunction: false
+  AfterStruct: false
+  AfterEnum: false
+  AfterClass: false
+  AfterControlStatement: false
+  BeforeElse: false
+  IndentBraces: false
+
+# 缩进设置
+IndentCaseLabels: true
+IndentGotoLabels: true
+IndentPPDirectives: None
+NamespaceIndentation: None
+
+# 空格设置
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# 对齐设置
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlines: Right
+AlignOperands: true
+AlignTrailingComments: true
+
+# 换行设置
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+BreakStringLiterals: true
+
+# 函数调用和声明
+AllowAllArgumentsOnNextLine: true
+
+# 指针和引用的对齐
+PointerAlignment: Right
+
+# 注释设置
+ReflowComments: true
+CommentPragmas: '^ IWYU pragma:'
+
+# 预处理器设置
+SortIncludes: true
+IncludeBlocks: Preserve
+IncludeCategories:
+  - Regex: '^"(thread_internal\.h)"'
+    Priority: 1
+  - Regex: '^".*\.h"'
+    Priority: 2
+  - Regex: '^<.*\.h>'
+    Priority: 3
+  - Regex: '.*'
+    Priority: 4
+
+# 其他设置
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+SortUsingDeclarations: true
+SpaceAfterTemplateKeyword: true
+SpaceBeforeInheritanceColon: true
+
+# 宏处理
+MacroBlockBegin: ''
+MacroBlockEnd: ''
+
+# C++特定设置 (虽然项目是C语言，但设置这些以防万一)
+AccessModifierOffset: -4
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+ConstructorInitializerIndentWidth: 4
+Cpp11BracedListStyle: true
+FixNamespaceComments: true
+---
