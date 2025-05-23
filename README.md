@@ -224,81 +224,33 @@ find_package(CrolinKit REQUIRED)
 target_link_libraries(your_target PRIVATE CrolinKit::thread)
 ```
 
-### 基本用法
+## 模块优化计划
 
-```c
-#include "thread.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
+### 线程池模块优化
 
-// 定义任务函数
-void my_task(void *arg) {
-    int task_id = *(int*)arg;
-    printf("执行任务 %d\n", task_id);
-    free(arg); // 释放参数
-}
+当前线程池模块已经实现了基本功能，但还有以下优化空间：
 
-int main() {
-    // 创建线程池，包含4个工作线程
-    thread_pool_t pool = thread_pool_create(4);
-    if (pool == NULL) {
-        fprintf(stderr, "创建线程池失败\n");
-        return 1;
-    }
-    
-    // 添加任务到线程池
-    for (int i = 0; i < 10; i++) {
-        int *arg = malloc(sizeof(int));
-        *arg = i + 1;
-        char task_name[64];
-        sprintf(task_name, "任务-%d", i + 1);
-        
-        if (thread_pool_add_task(pool, my_task, arg, task_name) != 0) {
-            fprintf(stderr, "添加任务失败\n");
-            free(arg);
-        }
-    }
-    
-    // 获取当前正在执行的任务名称
-    char **tasks = thread_pool_get_running_task_names(pool);
-    if (tasks != NULL) {
-        for (int i = 0; i < 4; i++) {
-            printf("线程 %d: %s\n", i, tasks[i]);
-        }
-        free_running_task_names(tasks, 4);
-    }
-    
-    // 等待任务完成（简化示例）
-    sleep(5);
-    
-    // 销毁线程池
-    thread_pool_destroy(pool);
-    
-    return 0;
-}
-```
+1. **动态线程数调整**：根据任务队列长度和系统负载自动调整工作线程数量
+2. **任务优先级支持**：实现任务优先级队列，优先处理高优先级任务
+3. **任务取消机制**：支持取消尚未开始执行的任务
+4. **任务超时控制**：为任务设置最大执行时间，超时自动中断
+5. **性能监控**：添加线程池性能统计功能，如平均任务等待时间、执行时间等
+6. **线程亲和性**：支持设置线程CPU亲和性，提高缓存命中率
+7. **内存优化**：减少任务队列的内存分配次数，使用内存池技术
 
-## API参考
+### 日志模块优化
+
+日志模块可以在以下方面进行改进：
+
+1. **异步日志**：实现异步日志写入，减少对主线程的阻塞
+2. **日志压缩**：支持自动压缩和归档历史日志文件
+3. **结构化日志**：支持JSON等结构化日志格式，便于日志分析
+4. **日志过滤**：实现更灵活的日志过滤机制，支持正则表达式过滤
+5. **远程日志**：支持将日志发送到远程服务器或日志聚合系统
+6. **上下文跟踪**：实现日志上下文跟踪，便于跟踪多线程环境中的调用链
+7. **性能优化**：减少日志格式化的开销，优化文件I/O操作
 
 详细API文档请参考[API参考文档](docs/api_reference.md)。
-
-```c
-// 创建线程池
-thread_pool_t thread_pool_create(int num_threads);
-
-// 添加任务
-int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg, const char *task_name);
-
-// 获取任务状态
-char **thread_pool_get_running_task_names(thread_pool_t pool);
-
-// 释放任务名称
-void free_running_task_names(char **task_names, int count);
-
-// 销毁线程池
-int thread_pool_destroy(thread_pool_t pool);
-```
 
 ## 开发计划
 
