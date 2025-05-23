@@ -3,8 +3,8 @@
  * @brief 日志模块基本使用示例
  */
 
-#include <stdio.h>
 #include "log.h"
+#include <stdio.h>
 
 int main(void)
 {

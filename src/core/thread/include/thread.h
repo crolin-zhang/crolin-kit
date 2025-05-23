@@ -9,8 +9,8 @@
 #define THREAD_H
 
 #include <pthread.h> // 用于 pthread_t，尽管现在是不透明结构的一部分。
-                     // 保留它是为了通用完整性，尽管如果所有 pthread 类型都隐藏在不透明 API 后面，
-                     // 则并非严格需要。
+// 保留它是为了通用完整性，尽管如果所有 pthread 类型都隐藏在不透明 API 后面，
+// 则并非严格需要。
 
 /**
  * @brief 任务名称的最大长度，包括空终止符。
@@ -37,7 +37,8 @@
  *
  * 使用日志模块的 LOG_ERROR 函数记录错误日志。
  */
-#define TPOOL_ERROR(fmt, ...) LOG_ERROR(LOG_MODULE_THREAD, "(%s:%d) " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define TPOOL_ERROR(fmt, ...)                                                                      \
+    LOG_ERROR(LOG_MODULE_THREAD, "(%s:%d) " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
 /**
  * @struct task_t
@@ -57,7 +58,7 @@ typedef struct {
  *
  * 此类型用于与线程池交互。实际的结构定义是库内部的。
  */
-typedef struct thread_pool_s* thread_pool_t;
+typedef struct thread_pool_s *thread_pool_t;
 
 // 公共函数声明
 
@@ -85,7 +86,8 @@ thread_pool_t thread_pool_create(int num_threads);
  * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
  *         池正在关闭，任务节点的内存分配失败)。
  */
-int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg, const char *task_name);
+int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg,
+                         const char *task_name);
 
 /**
  * @brief 销毁线程池。
