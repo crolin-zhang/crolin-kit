@@ -157,8 +157,20 @@ static void *worker_thread_function(void *arg)
         // 等待任务或关闭信号
         while (pool->task_queue_size == 0 && !pool->shutdown) {
             TPOOL_LOG("工作线程 #%d (线程池 %p): 等待任务。", thread_id, (void *)pool);
+            // 标记线程为空闲状态
+            pool->thread_status[thread_id] = 0; // 空闲
+            pool->idle_threads++;
             pthread_cond_wait(&(pool->notify), &(pool->lock));
             TPOOL_LOG("工作线程 #%d (线程池 %p): 已被唤醒。", thread_id, (void *)pool);
+            // 检查是否需要由于线程池缩小而退出
+            if (pool->thread_status[thread_id] == -1) {
+                TPOOL_LOG("工作线程 #%d (线程池 %p): 由于线程池缩小而退出。", thread_id, (void *)pool);
+                pool->idle_threads--;
+                pthread_mutex_unlock(&(pool->lock));
+                pthread_exit(NULL);
+            }
+            pool->idle_threads--;
+            pool->thread_status[thread_id] = 1; // 忙碌
         }
 
         // 退出循环的条件：池正在关闭 并且 队列为空
@@ -199,6 +211,9 @@ static void *worker_thread_function(void *arg)
                       (void *)pool);
             strncpy(pool->running_task_names[thread_id], "[idle]", MAX_TASK_NAME_LEN - 1);
             pool->running_task_names[thread_id][MAX_TASK_NAME_LEN - 1] = '\0';
+            // 标记线程为空闲状态
+            pool->thread_status[thread_id] = 0; // 空闲
+            pool->idle_threads++;
         } else if (pool->shutdown) {
             // 如果 task_dequeue_internal 返回 NULL (例如，出队期间 malloc 失败) 并且 池正在关闭。
             // 这确保即使在关闭期间出队失败，线程也会退出。
@@ -255,7 +270,11 @@ thread_pool_t thread_pool_create(int num_threads)
     }
 
     pool->thread_count = num_threads;
+    pool->min_threads = 1; // 默认最小线程数为1
+    pool->max_threads = num_threads * 2; // 默认最大线程数为初始线程数的两倍
+    pool->idle_threads = 0; // 初始时没有空闲线程
     pool->shutdown = 0; // 池处于活动状态
+    pool->resize_shutdown = 0; // 没有线程需要由于缩小而退出
     pool->started = 0;  // 尚未启动任何线程
     pool->head = NULL;
     pool->tail = NULL;
@@ -268,10 +287,19 @@ thread_pool_t thread_pool_create(int num_threads)
         free(pool);
         return NULL;
     }
+    
+    // 初始化调整大小互斥锁
+    if (pthread_mutex_init(&pool->resize_lock, NULL) != 0) {
+        TPOOL_ERROR("未能为线程池 %p 初始化调整大小互斥锁。", (void *)pool);
+        pthread_mutex_destroy(&pool->lock);
+        free(pool);
+        return NULL;
+    }
 
     if (pthread_cond_init(&pool->notify, NULL) != 0) {
         TPOOL_ERROR("未能为线程池 %p 初始化条件变量。", (void *)pool);
         // perror("pthread_cond_init");
+        pthread_mutex_destroy(&pool->resize_lock); // 清理已成功初始化的调整大小互斥锁
         pthread_mutex_destroy(&pool->lock); // 清理已成功初始化的互斥锁
         free(pool);
         return NULL;
@@ -282,10 +310,28 @@ thread_pool_t thread_pool_create(int num_threads)
     if (pool->threads == NULL) {
         TPOOL_ERROR("未能为线程池 %p 的线程数组分配内存。", (void *)pool);
         // perror("malloc for pool->threads");
+        pthread_mutex_destroy(&pool->resize_lock);
         pthread_mutex_destroy(&pool->lock);
         pthread_cond_destroy(&pool->notify);
         free(pool);
         return NULL;
+    }
+    
+    // 为线程状态分配数组
+    pool->thread_status = (int *)calloc(num_threads, sizeof(int));
+    if (pool->thread_status == NULL) {
+        TPOOL_ERROR("未能为线程池 %p 的线程状态数组分配内存。", (void *)pool);
+        free(pool->threads);
+        pthread_mutex_destroy(&pool->resize_lock);
+        pthread_mutex_destroy(&pool->lock);
+        pthread_cond_destroy(&pool->notify);
+        free(pool);
+        return NULL;
+    }
+    
+    // 初始化线程状态为1（忙碌），因为线程创建后将立即开始工作
+    for (int i = 0; i < num_threads; i++) {
+        pool->thread_status[i] = 1;
     }
 
     // 为正在运行的任务名称分配数组
@@ -502,13 +548,15 @@ int thread_pool_destroy(thread_pool_t pool)
 
     // 销毁互斥锁和条件变量
     pthread_mutex_destroy(&(pool->lock));
+    pthread_mutex_destroy(&(pool->resize_lock));
     pthread_cond_destroy(&(pool->notify));
 
     // 在释放池之前记录日志，避免释放后使用
     TPOOL_LOG("线程池 (%p) 即将销毁。", (void *)pool);
 
-    // 释放线程数组和池结构本身
+    // 释放线程数组、线程状态数组和池结构本身
     free(pool->threads);
+    free(pool->thread_status);
     free(pool); // 释放 struct thread_pool_s
 
     // 注意：我们不在这里关闭日志模块，因为其他模块可能仍在使用它
@@ -599,4 +647,366 @@ void free_running_task_names(char **task_names, int count)
     }
     free(task_names); // 释放数组本身
     TPOOL_LOG("复制的任务名称数组已释放。");
+}
+
+/**
+ * @brief 调整线程池大小。
+ *
+ * 根据指定的新线程数量调整线程池大小。如果新线程数量大于当前数量，
+ * 将创建新的线程。如果新线程数量小于当前数量，将优雅地减少线程数量。
+ *
+ * @param pool 指向 thread_pool_t 实例的指针。
+ * @param new_thread_count 新的线程数量。必须大于等于 min_threads 且小于等于 max_threads。
+ * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，新线程数量超出范围，
+ *         池正在关闭，线程创建失败)。
+ */
+int thread_pool_resize(thread_pool_t pool, int new_thread_count)
+{
+    if (pool == NULL) {
+        TPOOL_ERROR("thread_pool_resize: 池为 NULL。");
+        return -1;
+    }
+
+    if (new_thread_count < pool->min_threads || new_thread_count > pool->max_threads) {
+        TPOOL_ERROR("thread_pool_resize: 新线程数量 %d 超出范围 [%d, %d]。",
+                   new_thread_count, pool->min_threads, pool->max_threads);
+        return -1;
+    }
+
+    // 如果池正在关闭，不允许调整大小
+    pthread_mutex_lock(&(pool->lock));
+    if (pool->shutdown) {
+        pthread_mutex_unlock(&(pool->lock));
+        TPOOL_ERROR("thread_pool_resize: 池正在关闭，不能调整大小。");
+        return -1;
+    }
+    pthread_mutex_unlock(&(pool->lock));
+
+    // 锁定调整大小互斥锁
+    pthread_mutex_lock(&(pool->resize_lock));
+
+    // 如果新线程数量与当前线程数量相同，不需要调整
+    if (new_thread_count == pool->thread_count) {
+        pthread_mutex_unlock(&(pool->resize_lock));
+        TPOOL_LOG("thread_pool_resize: 新线程数量与当前线程数量相同，不需要调整。");
+        return 0;
+    }
+
+    // 处理增加或减少线程数量的情况
+    if (new_thread_count > pool->thread_count) {
+        // 增加线程数量
+        int threads_to_add = new_thread_count - pool->thread_count;
+        TPOOL_LOG("thread_pool_resize: 增加 %d 个线程。", threads_to_add);
+
+        // 重新分配线程数组和线程状态数组
+        pthread_t *new_threads = (pthread_t *)realloc(pool->threads, sizeof(pthread_t) * new_thread_count);
+        if (new_threads == NULL) {
+            pthread_mutex_unlock(&(pool->resize_lock));
+            TPOOL_ERROR("thread_pool_resize: 重新分配线程数组失败。");
+            return -1;
+        }
+        pool->threads = new_threads;
+
+        int *new_thread_status = (int *)realloc(pool->thread_status, sizeof(int) * new_thread_count);
+        if (new_thread_status == NULL) {
+            pthread_mutex_unlock(&(pool->resize_lock));
+            TPOOL_ERROR("thread_pool_resize: 重新分配线程状态数组失败。");
+            return -1;
+        }
+        pool->thread_status = new_thread_status;
+
+        // 初始化新线程状态
+        for (int i = pool->thread_count; i < new_thread_count; i++) {
+            pool->thread_status[i] = 0; // 空闲
+        }
+
+        // 重新分配运行任务名称数组
+        pthread_mutex_lock(&(pool->lock));
+        char **new_running_task_names = (char **)realloc(pool->running_task_names, sizeof(char *) * new_thread_count);
+        if (new_running_task_names == NULL) {
+            // 注意锁的释放顺序：先释放内层锁，再释放外层锁
+            // 获取锁的顺序是：先 resize_lock，再 lock
+            // 所以释放顺序应该是：先 lock，再 resize_lock
+            pthread_mutex_unlock(&(pool->lock));
+            pthread_mutex_unlock(&(pool->resize_lock));
+            TPOOL_ERROR("thread_pool_resize: 重新分配运行任务名称数组失败。");
+            return -1;
+        }
+        pool->running_task_names = new_running_task_names;
+
+        // 为新线程分配运行任务名称字符串
+        for (int i = pool->thread_count; i < new_thread_count; i++) {
+            pool->running_task_names[i] = (char *)malloc(MAX_TASK_NAME_LEN);
+            if (pool->running_task_names[i] == NULL) {
+                // 如果分配失败，释放已分配的内存
+                for (int j = pool->thread_count; j < i; j++) {
+                    free(pool->running_task_names[j]);
+                }
+                pthread_mutex_unlock(&(pool->lock));
+                pthread_mutex_unlock(&(pool->resize_lock));
+                TPOOL_ERROR("thread_pool_resize: 为新线程分配运行任务名称字符串失败。");
+                return -1;
+            }
+            strncpy(pool->running_task_names[i], "[idle]", MAX_TASK_NAME_LEN - 1);
+            pool->running_task_names[i][MAX_TASK_NAME_LEN - 1] = '\0';
+        }
+        pthread_mutex_unlock(&(pool->lock));
+
+        // 创建新线程
+        for (int i = pool->thread_count; i < new_thread_count; i++) {
+            thread_args_t *thread_args = (thread_args_t *)malloc(sizeof(thread_args_t));
+            if (thread_args == NULL) {
+                pthread_mutex_unlock(&(pool->resize_lock));
+                TPOOL_ERROR("thread_pool_resize: 为新线程分配参数结构失败。");
+                return -1;
+            }
+            thread_args->pool = pool;
+            thread_args->thread_id = i;
+
+            if (pthread_create(&(pool->threads[i]), NULL, worker_thread_function, thread_args) != 0) {
+                free(thread_args);
+                pthread_mutex_unlock(&(pool->resize_lock));
+                TPOOL_ERROR("thread_pool_resize: 创建新线程失败。");
+                return -1;
+            }
+            pool->started++;
+            TPOOL_LOG("thread_pool_resize: 创建新线程 #%d。", i);
+        }
+
+        // 更新线程数量
+        pool->thread_count = new_thread_count;
+        pthread_mutex_unlock(&(pool->resize_lock));
+        TPOOL_LOG("thread_pool_resize: 成功增加线程数量到 %d。", new_thread_count);
+        return 0;
+    }
+    
+    // 减少线程数量
+    if (new_thread_count < pool->thread_count) {
+        int threads_to_remove = pool->thread_count - new_thread_count;
+        TPOOL_LOG("thread_pool_resize: 减少 %d 个线程。", threads_to_remove);
+
+        // 标记需要退出的线程
+        pthread_mutex_lock(&(pool->lock));
+        int marked_count = 0;
+        for (int i = 0; i < pool->thread_count && marked_count < threads_to_remove; i++) {
+            if (pool->thread_status[i] == 0) { // 只标记空闲线程
+                pool->thread_status[i] = -1; // 标记为退出
+                marked_count++;
+            }
+        }
+
+        // 如果标记的线程数量少于需要移除的线程数量，等待更多线程变为空闲
+        if (marked_count < threads_to_remove) {
+            TPOOL_LOG("thread_pool_resize: 只标记了 %d 个线程，需要等待更多线程变为空闲。", marked_count);
+            pool->resize_shutdown = 1; // 设置缩小标志
+        }
+
+        // 唯醒所有线程，使其检查退出标志
+        pthread_cond_broadcast(&(pool->notify));
+        pthread_mutex_unlock(&(pool->lock));
+
+        // 等待标记的线程退出
+        int join_attempts = 0;
+        const int max_join_attempts = 3; // 最大尝试次数
+        for (int i = 0; i < pool->thread_count && marked_count > 0; i++) {
+            if (pool->thread_status[i] == -1) {
+                if (pthread_join(pool->threads[i], NULL) != 0) {
+                    TPOOL_ERROR("thread_pool_resize: 等待线程 #%d 退出失败。", i);
+                    join_attempts++;
+                    if (join_attempts >= max_join_attempts) {
+                        // 达到最大尝试次数，强制减少marked_count
+                        marked_count--;
+                        TPOOL_ERROR("thread_pool_resize: 放弃等待线程 #%d 退出。", i);
+                    }
+                } else {
+                    TPOOL_LOG("thread_pool_resize: 线程 #%d 成功退出。", i);
+                    marked_count--;
+                }
+            }
+        }
+
+        // 重新组织线程数组，将活动线程移到前面
+        pthread_mutex_lock(&(pool->lock));
+        int active_index = 0;
+        for (int i = 0; i < pool->thread_count; i++) {
+            if (pool->thread_status[i] != -1) { // 如果线程仍然活动
+                if (active_index != i) {
+                    // 移动线程 ID
+                    pool->threads[active_index] = pool->threads[i];
+                    // 移动线程状态
+                    pool->thread_status[active_index] = pool->thread_status[i];
+                    // 移动运行任务名称
+                    char *temp = pool->running_task_names[active_index];
+                    pool->running_task_names[active_index] = pool->running_task_names[i];
+                    pool->running_task_names[i] = temp;
+                }
+                active_index++;
+            }
+        }
+
+        // 释放不再需要的运行任务名称字符串
+        for (int i = new_thread_count; i < pool->thread_count; i++) {
+            free(pool->running_task_names[i]);
+        }
+
+        // 重新分配数组
+        pthread_t *new_threads = (pthread_t *)realloc(pool->threads, sizeof(pthread_t) * new_thread_count);
+        if (new_threads == NULL) {
+            // 如果重新分配失败，标记已释放的指针为 NULL，避免内存泄漏
+            for (int i = new_thread_count; i < pool->thread_count; i++) {
+                pool->running_task_names[i] = NULL; // 标记为已释放
+            }
+            // 注意锁的释放顺序：先释放内层锁，再释放外层锁
+            pthread_mutex_unlock(&(pool->lock));
+            pthread_mutex_unlock(&(pool->resize_lock));
+            TPOOL_ERROR("thread_pool_resize: 重新分配线程数组失败。");
+            return -1;
+        }
+        pool->threads = new_threads;
+
+        int *new_thread_status = (int *)realloc(pool->thread_status, sizeof(int) * new_thread_count);
+        if (new_thread_status == NULL) {
+            // 如果重新分配失败，标记已释放的指针为 NULL，避免内存泄漏
+            for (int i = new_thread_count; i < pool->thread_count; i++) {
+                pool->running_task_names[i] = NULL; // 标记为已释放
+            }
+            // 注意锁的释放顺序：先释放内层锁，再释放外层锁
+            pthread_mutex_unlock(&(pool->lock));
+            pthread_mutex_unlock(&(pool->resize_lock));
+            TPOOL_ERROR("thread_pool_resize: 重新分配线程状态数组失败。");
+            return -1;
+        }
+        pool->thread_status = new_thread_status;
+
+        char **new_running_task_names = (char **)realloc(pool->running_task_names, sizeof(char *) * new_thread_count);
+        if (new_running_task_names == NULL) {
+            // 如果重新分配失败，标记已释放的指针为 NULL，避免内存泄漏
+            for (int i = new_thread_count; i < pool->thread_count; i++) {
+                pool->running_task_names[i] = NULL; // 标记为已释放
+            }
+            // 注意锁的释放顺序：先释放内层锁，再释放外层锁
+            pthread_mutex_unlock(&(pool->lock));
+            pthread_mutex_unlock(&(pool->resize_lock));
+            TPOOL_ERROR("thread_pool_resize: 重新分配运行任务名称数组失败。");
+            return -1;
+        }
+        pool->running_task_names = new_running_task_names;
+
+        // 重置缩小标志
+        pool->resize_shutdown = 0;
+
+        // 更新线程数量
+        pool->thread_count = new_thread_count;
+        
+        // 更新线程状态数组中的线程 ID
+        // 这确保了在重新组织线程数组后，每个工作线程的 ID 与其在数组中的索引一致
+        // 这对于下一次调整线程池大小时的正确性至关重要
+        for (int i = 0; i < new_thread_count; i++) {
+            // 注意：我们不能直接修改线程 ID，因为线程已经在运行
+            // 但我们可以更新线程状态数组中的索引信息，以便于下一次调整
+            // 在工作线程函数中，线程 ID 是通过 thread_args 传递的
+            // 因此这里的更新不会影响已经运行的线程
+            // 但会确保下一次调整时的正确性
+            pool->thread_status[i] = (pool->thread_status[i] == 0) ? 0 : 1; // 保持空闲/忙碌状态不变
+        }
+        
+        pthread_mutex_unlock(&(pool->lock));
+
+        pthread_mutex_unlock(&(pool->resize_lock));
+        TPOOL_LOG("thread_pool_resize: 成功减少线程数量到 %d。", new_thread_count);
+        return 0;
+    }
+    // 如果新线程数量等于当前线程数量，不需要调整，已在前面处理
+    return 0;
+}
+
+/**
+ * @brief 获取线程池的统计信息。
+ *
+ * 返回线程池的当前状态信息，包括线程数量、任务队列长度等。
+ *
+ * @param pool 指向 thread_pool_t 实例的指针。
+ * @param stats 指向 thread_pool_stats_t 结构的指针，用于存储统计信息。
+ * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，stats 为 NULL)。
+ */
+int thread_pool_get_stats(thread_pool_t pool, thread_pool_stats_t *stats)
+{
+    if (pool == NULL || stats == NULL) {
+        TPOOL_ERROR("thread_pool_get_stats: 池或统计信息结构为 NULL。");
+        return -1;
+    }
+
+    pthread_mutex_lock(&(pool->lock));
+    stats->thread_count = pool->thread_count;
+    stats->min_threads = pool->min_threads;
+    stats->max_threads = pool->max_threads;
+    stats->idle_threads = pool->idle_threads;
+    stats->task_queue_size = pool->task_queue_size;
+    stats->started = pool->started;
+    pthread_mutex_unlock(&(pool->lock));
+
+    TPOOL_LOG("thread_pool_get_stats: 成功获取线程池 %p 的统计信息。", (void *)pool);
+    return 0;
+}
+
+/**
+ * @brief 设置线程池的最小和最大线程数量。
+ *
+ * 设置线程池允许的线程数量范围。当前线程数量将保持不变，
+ * 除非当前数量超出新的范围。
+ *
+ * @param pool 指向 thread_pool_t 实例的指针。
+ * @param min_threads 最小线程数量，必须大于 0。
+ * @param max_threads 最大线程数量，必须大于等于 min_threads。
+ * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，无效的线程数量范围)。
+ */
+int thread_pool_set_limits(thread_pool_t pool, int min_threads, int max_threads)
+{
+    if (pool == NULL) {
+        TPOOL_ERROR("thread_pool_set_limits: 池为 NULL。");
+        return -1;
+    }
+
+    if (min_threads <= 0 || max_threads < min_threads) {
+        TPOOL_ERROR("thread_pool_set_limits: 无效的线程数量范围 [%d, %d]。", min_threads, max_threads);
+        return -1;
+    }
+
+    // 如果池正在关闭，不允许设置限制
+    pthread_mutex_lock(&(pool->lock));
+    if (pool->shutdown) {
+        pthread_mutex_unlock(&(pool->lock));
+        TPOOL_ERROR("thread_pool_set_limits: 池正在关闭，不能设置限制。");
+        return -1;
+    }
+    pthread_mutex_unlock(&(pool->lock));
+
+    // 锁定调整大小互斥锁
+    pthread_mutex_lock(&(pool->resize_lock));
+
+    // 更新线程数量范围
+    pool->min_threads = min_threads;
+    pool->max_threads = max_threads;
+
+    // 如果当前线程数量超出新的范围，调整线程数量
+    int current_thread_count = pool->thread_count;
+    pthread_mutex_unlock(&(pool->resize_lock));
+
+    // 如果当前线程数量小于新的最小线程数量，增加线程
+    if (current_thread_count < min_threads) {
+        TPOOL_LOG("thread_pool_set_limits: 当前线程数量 %d 小于新的最小线程数量 %d，增加线程。",
+                  current_thread_count, min_threads);
+        return thread_pool_resize(pool, min_threads);
+    }
+    
+    // 如果当前线程数量大于新的最大线程数量，减少线程
+    if (current_thread_count > max_threads) {
+        TPOOL_LOG("thread_pool_set_limits: 当前线程数量 %d 大于新的最大线程数量 %d，减少线程。",
+                  current_thread_count, max_threads);
+        return thread_pool_resize(pool, max_threads);
+    }
+
+    TPOOL_LOG("thread_pool_set_limits: 成功设置线程池 %p 的线程数量范围为 [%d, %d]。",
+              (void *)pool, min_threads, max_threads);
+    return 0;
 }

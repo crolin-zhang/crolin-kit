@@ -32,21 +32,26 @@ typedef struct task_node_s {
  *
  * 此结构持有与线程池实例相关的所有状态，
  * 包括同步原语、线程管理信息、
- * 任务队列和操作标志。
  */
 struct thread_pool_s {
-    pthread_mutex_t lock; /**< 互斥锁，用于保护对共享池数据的访问 (例如，任务队列、标志)。 */
-    pthread_cond_t notify; /**< 条件变量，用于通知工作线程有新任务或需要关闭。 */
-    pthread_t *threads;  /**< 工作线程标识符数组。 */
-    int thread_count;    /**< 池中的工作线程数量。 */
-    task_node_t *head;   /**< 指向任务队列头部的指针。 */
-    task_node_t *tail;   /**< 指向任务队列尾部的指针。 */
-    int task_queue_size; /**< 队列中当前的任务数量。 */
-    int shutdown; /**< 标志，指示池的关闭状态 (0: 活动, 1: 正在关闭/已关闭)。 */
+    pthread_mutex_t lock;  /**< 用于保护任务队列和其他共享状态的互斥锁。 */
+    pthread_mutex_t resize_lock; /**< 用于保护线程池大小调整操作的互斥锁。 */
+    pthread_cond_t notify; /**< 条件变量，用于通知工作线程有新任务或池正在关闭。 */
+    pthread_t *threads;    /**< 工作线程 ID 数组。 */
+    struct task_node_s *head; /**< 任务队列头指针。 */
+    struct task_node_s *tail; /**< 任务队列尾指针。 */
+    int thread_count;     /**< 池中的线程数量。 */
+    int min_threads;      /**< 池中允许的最小线程数量。 */
+    int max_threads;      /**< 池中允许的最大线程数量。 */
+    int idle_threads;     /**< 当前空闲的线程数量。 */
+    int task_queue_size;  /**< 当前任务队列中的任务数量。 */
+    int shutdown;         /**< 标志，指示池是否正在关闭 (1) 或活动 (0)。 */
+    int resize_shutdown;  /**< 标志，指示是否有线程需要由于缩小而退出 (1) 或不需要 (0)。 */
     int started;  /**< 已成功启动的线程数量。 */
     char **running_task_names; /**< 字符串数组，每个字符串存储
-                                    相应工作线程当前正在执行的任务的名称。
-                                    每个字符串的最大长度为 MAX_TASK_NAME_LEN。 */
+                                     相应工作线程当前正在执行的任务的名称。
+                                     每个字符串的最大长度为 MAX_TASK_NAME_LEN。 */
+    int *thread_status; /**< 线程状态数组，0表示空闲，1表示忙碌，-1表示应该退出。 */
 };
 
 /**

@@ -119,10 +119,62 @@ char **thread_pool_get_running_task_names(thread_pool_t pool);
 /**
  * @brief 释放由 `thread_pool_get_running_task_names` 返回的任务名称数组。
  *
- * @param task_names 要释放的字符串数组 (char **)。
+ * @param task_names 要释放的字符串数组 (char **).
  * @param count 数组中的字符串数量 (应与调用 `thread_pool_get_running_task_names` 时
  *              池的 thread_count 相匹配)。
  */
 void free_running_task_names(char **task_names, int count);
+
+/**
+ * @struct thread_pool_stats_t
+ * @brief 线程池的统计信息。
+ *
+ * 此结构提供线程池的当前状态信息，包括线程数量、任务队列长度等。
+ */
+typedef struct {
+    int thread_count;    /**< 当前线程数量 */
+    int min_threads;     /**< 最小线程数量 */
+    int max_threads;     /**< 最大线程数量 */
+    int idle_threads;    /**< 空闲线程数量 */
+    int task_queue_size; /**< 当前任务队列长度 */
+    int started;         /**< 已启动的线程数量 */
+} thread_pool_stats_t;
+
+/**
+ * @brief 调整线程池大小。
+ *
+ * 根据指定的新线程数量调整线程池大小。如果新线程数量大于当前数量，
+ * 将创建新的线程。如果新线程数量小于当前数量，将优雅地减少线程数量。
+ *
+ * @param pool 指向 thread_pool_t 实例的指针。
+ * @param new_thread_count 新的线程数量。必须大于等于 min_threads 且小于等于 max_threads。
+ * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，新线程数量超出范围，
+ *         池正在关闭，线程创建失败)。
+ */
+int thread_pool_resize(thread_pool_t pool, int new_thread_count);
+
+/**
+ * @brief 获取线程池的统计信息。
+ *
+ * 返回线程池的当前状态信息，包括线程数量、任务队列长度等。
+ *
+ * @param pool 指向 thread_pool_t 实例的指针。
+ * @param stats 指向 thread_pool_stats_t 结构的指针，用于存储统计信息。
+ * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，stats 为 NULL)。
+ */
+int thread_pool_get_stats(thread_pool_t pool, thread_pool_stats_t *stats);
+
+/**
+ * @brief 设置线程池的最小和最大线程数量。
+ *
+ * 设置线程池允许的线程数量范围。当前线程数量将保持不变，
+ * 除非当前数量超出新的范围。
+ *
+ * @param pool 指向 thread_pool_t 实例的指针。
+ * @param min_threads 最小线程数量，必须大于 0。
+ * @param max_threads 最大线程数量，必须大于等于 min_threads。
+ * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，无效的线程数量范围)。
+ */
+int thread_pool_set_limits(thread_pool_t pool, int min_threads, int max_threads);
 
 #endif /* THREAD_H */
