@@ -24,6 +24,11 @@ add_custom_target(copy-compile-commands
 
 set(CMAKE_C_EXTENSIONS OFF)
 
+# 添加全局编译选项
+add_compile_options(-Wall -Wextra -Wpedantic)
+# 禁用GNU扩展警告，因为项目中使用了##__VA_ARGS__扩展
+add_compile_options(-Wno-gnu-zero-variadic-macro-arguments)
+
 if(CMAKE_CROSSCOMPILING)
     add_compile_options(-fPIC)
     add_compile_definitions(CROSS_COMPILE)
