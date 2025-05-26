@@ -1,4 +1,4 @@
-#include "../../../../src/core/thread/include/thread.h"
+#include "thread.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

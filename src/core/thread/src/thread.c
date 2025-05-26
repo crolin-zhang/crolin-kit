@@ -10,6 +10,7 @@
 #include <stdio.h>           // 用于 TPOOL_LOG/TPOOL_ERROR 和 perror
 #include <stdlib.h>          // 用于 malloc, free, calloc
 #include <string.h>          // 用于 strncpy
+#include "log.h"
 
 // --- 任务队列管理函数 (内部) ---
 
