@@ -1,4 +1,4 @@
-#include "../../src/core/thread/include/thread.h"
+#include "thread.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +6,10 @@
 
 // 日志宏定义
 #define LOG_PREFIX "[THREAD_EXAMPLE]"
+
+// 注意：下面的宏定义使用了GNU扩展 (##__VA_ARGS__)
+// 这是有意为之，以支持空参数的情况
+// 如果需要完全符合C标准，可以分开定义有参数和无参数的宏
 #define LOG(fmt, ...) printf("%s " fmt "\n", LOG_PREFIX, ##__VA_ARGS__)
 
 // 任务函数
@@ -21,7 +25,7 @@ void example_task(void *arg)
     free(arg);
 }
 
-int main()
+int main(void)
 {
     LOG("线程池示例程序开始运行");
 
@@ -34,10 +38,10 @@ int main()
     }
 
     // 添加任务到线程池
-    const int NUM_TASKS = 10;
-    LOG("向线程池添加 %d 个任务", NUM_TASKS);
+    const int num_tasks = 10;
+    LOG("向线程池添加 %d 个任务", num_tasks);
 
-    for (int i = 0; i < NUM_TASKS; i++) {
+    for (int i = 0; i < num_tasks; i++) {
         int *task_id = malloc(sizeof(int));
         *task_id = i + 1;
 
