@@ -177,4 +177,30 @@ int thread_pool_get_stats(thread_pool_t pool, thread_pool_stats_t *stats);
  */
 int thread_pool_set_limits(thread_pool_t pool, int min_threads, int max_threads);
 
+/**
+ * @brief 启用线程池自动动态调整功能
+ *
+ * 根据任务队列长度和空闲线程数量自动调整线程池大小。
+ * 当任务队列长度超过high_watermark时，会增加线程数量。
+ * 当空闲线程数量超过low_watermark时，会减少线程数量。
+ * 线程数量的调整会在指定的时间间隔内最多进行一次，以避免频繁调整。
+ * 线程数量始终保持在min_threads和max_threads之间（通过thread_pool_set_limits设置）。
+ *
+ * @param pool 指向线程池实例的指针
+ * @param high_watermark 任务队列高水位线，当任务队列长度超过此值时增加线程
+ * @param low_watermark 空闲线程高水位线，当空闲线程数超过此值时减少线程
+ * @param adjust_interval 调整检查间隔（毫秒）
+ * @return 成功返回0，失败返回-1（例如，pool为NULL，参数无效）
+ */
+int thread_pool_enable_auto_adjust(thread_pool_t pool, int high_watermark, int low_watermark,
+                                   int adjust_interval);
+
+/**
+ * @brief 禁用线程池自动动态调整功能
+ *
+ * @param pool 指向线程池实例的指针
+ * @return 成功返回0，失败返回-1（例如，pool为NULL）
+ */
+int thread_pool_disable_auto_adjust(thread_pool_t pool);
+
 #endif /* THREAD_H */
