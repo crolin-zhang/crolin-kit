@@ -24,18 +24,47 @@
 #include "log.h" // 包含日志模块的头文件
 
 /**
+ * @def TPOOL_DEBUG
+ * @brief 用于调试日志消息的宏。
+ *
+ * 使用日志模块的 LOG_DEBUG 函数记录调试日志。
+ * 这些日志只在调试级别下可见，包含详细的内部状态信息。
+ */
+#define TPOOL_DEBUG(fmt, ...) LOG_DEBUG(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
+
+/**
+ * @def TPOOL_TRACE
+ * @brief 用于跟踪日志消息的宏。
+ *
+ * 使用日志模块的 LOG_TRACE 函数记录最详细的跟踪日志。
+ * 这些日志只在跟踪级别下可见，包含非常详细的内部状态和流程信息。
+ */
+#define TPOOL_TRACE(fmt, ...) LOG_TRACE(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
+
+/**
  * @def TPOOL_LOG
  * @brief 用于一般日志消息的宏。
  *
  * 使用日志模块的 LOG_INFO 函数记录日志。
+ * 这些日志在信息级别下可见，包含重要的状态变化和操作信息。
  */
 #define TPOOL_LOG(fmt, ...) LOG_INFO(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
+
+/**
+ * @def TPOOL_WARN
+ * @brief 用于警告日志消息的宏。
+ *
+ * 使用日志模块的 LOG_WARN 函数记录警告日志。
+ * 这些日志在警告级别下可见，包含可能存在的问题或异常情况。
+ */
+#define TPOOL_WARN(fmt, ...) LOG_WARN(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
 
 /**
  * @def TPOOL_ERROR
  * @brief 用于错误日志消息的宏。
  *
  * 使用日志模块的 LOG_ERROR 函数记录错误日志。
+ * 这些日志在错误级别下可见，包含函数执行错误和异常情况。
  */
 #define TPOOL_ERROR(fmt, ...)                                                                      \
     LOG_ERROR(LOG_MODULE_THREAD, "(%s:%d) " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
