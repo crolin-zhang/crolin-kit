@@ -180,7 +180,7 @@ static void submit_tasks(thread_pool_t pool, int count, void (*task_func)(void *
         char task_name[32];
         snprintf(task_name, sizeof(task_name), "Task-%d", i + 1);
 
-        if (thread_pool_add_task(pool, task_func, task_id, task_name) != 0) {
+        if (thread_pool_add_task_default(pool, task_func, task_id, task_name) != 0) {
             printf("提交任务失败: %d/%d\n", i + 1, count);
             free(task_id);
             return;

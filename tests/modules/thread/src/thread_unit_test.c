@@ -100,7 +100,7 @@ static void test_basic_functionality(void)
         char task_name[64];
         snprintf(task_name, sizeof(task_name), "Task-%d", i);
 
-        int result = thread_pool_add_task(pool, test_task, task_id, task_name);
+        int result = thread_pool_add_task_default(pool, test_task, task_id, task_name);
         assert(result == 0);
         printf("已添加任务 #%d\n", i);
     }
@@ -185,12 +185,12 @@ static void test_error_handling(void)
     assert(pool != NULL);
 
     // 测试无效的任务函数
-    int result = thread_pool_add_task(pool, NULL, NULL, "invalid-task");
+    int result = thread_pool_add_task_default(pool, NULL, NULL, "invalid-task");
     assert(result != 0);
     printf("测试通过: 无法添加函数指针为NULL的任务\n");
 
     // 测试无效的线程池指针
-    result = thread_pool_add_task(NULL, test_task, NULL, "invalid-pool");
+    result = thread_pool_add_task_default(NULL, test_task, NULL, "invalid-pool");
     assert(result != 0);
     printf("测试通过: 无法向NULL线程池添加任务\n");
 

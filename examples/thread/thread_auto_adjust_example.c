@@ -123,7 +123,7 @@ int main(void)
             continue;
         }
         *arg = i;
-        if (thread_pool_add_task(g_pool, task_function, arg, "task") != 0) {
+        if (thread_pool_add_task_default(g_pool, task_function, arg, "task") != 0) {
             printf("添加任务 #%d 失败\n", i);
             free(arg);
         }
@@ -142,7 +142,7 @@ int main(void)
             continue;
         }
         *arg = i + 3;
-        if (thread_pool_add_task(g_pool, task_function, arg, "task") != 0) {
+        if (thread_pool_add_task_default(g_pool, task_function, arg, "task") != 0) {
             printf("添加任务 #%d 失败\n", i);
             free(arg);
         }
@@ -174,7 +174,7 @@ int main(void)
             continue;
         }
         *arg = i + 13;
-        if (thread_pool_add_task(g_pool, task_function, arg, "task") != 0) {
+        if (thread_pool_add_task_default(g_pool, task_function, arg, "task") != 0) {
             printf("添加任务 #%d 失败\n", i);
             free(arg);
         }

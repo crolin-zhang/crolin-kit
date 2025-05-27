@@ -48,7 +48,7 @@ int main(void)
         char task_name[64];
         snprintf(task_name, sizeof(task_name), "示例任务-%d", i + 1);
 
-        if (thread_pool_add_task(pool, example_task, task_id, task_name) != 0) {
+        if (thread_pool_add_task_default(pool, example_task, task_id, task_name) != 0) {
             LOG("添加任务 %d 失败", i + 1);
             free(task_id);
         } else {

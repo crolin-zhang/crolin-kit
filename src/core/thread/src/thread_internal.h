@@ -19,9 +19,9 @@
  * 每个节点包含一个任务和指向队列中下一个任务的指针。
  * 此结构是线程池实现的内部结构。
  */
-typedef struct TaskNode {
-    task_t task; /**< 实际的任务数据 (函数、参数、名称)。task_t 在 thread.h 中定义。 */
-    struct TaskNode *next; /**< 指向队列中下一个任务节点的指针。 */
+typedef struct TAKS_NODE_S {
+    task_t task; /**< 实际的任务数据 (函数、参数、名称、优先级)。task_t 在 thread.h 中定义。 */
+    struct task_node_s *next; /**< 指向队列中下一个任务节点的指针。 */
 } task_node_t;             /**< 内部使用的类型定义。 */
 
 /**

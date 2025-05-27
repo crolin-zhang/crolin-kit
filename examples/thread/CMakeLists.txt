@@ -22,3 +22,8 @@ target_include_directories(thread_task_names_example PRIVATE ${CMAKE_BINARY_DIR}
 add_executable(thread_pool_example thread_pool_example.c)
 target_link_libraries(thread_pool_example PRIVATE thread)
 target_include_directories(thread_pool_example PRIVATE ${CMAKE_BINARY_DIR}/include)
+
+# 线程池任务优先级示例
+add_executable(thread_priority_example thread_priority_example.c)
+target_link_libraries(thread_priority_example PRIVATE thread)
+target_include_directories(thread_priority_example PRIVATE ${CMAKE_BINARY_DIR}/include)

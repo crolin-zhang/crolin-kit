@@ -136,7 +136,7 @@ int main(void)
         char task_name[64];
         snprintf(task_name, sizeof(task_name), "我的名字是 长时间任务_%d", i + 1);
         
-        if (thread_pool_add_task(pool, long_running_task, task_id, task_name) != 0) {
+        if (thread_pool_add_task_default(pool, long_running_task, task_id, task_name) != 0) {
             fprintf(stderr, "添加任务 #%d 失败\n", i + 1);
             free(task_id);
         } else {

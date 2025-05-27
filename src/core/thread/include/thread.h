@@ -41,6 +41,18 @@
     LOG_ERROR(LOG_MODULE_THREAD, "(%s:%d) " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
 /**
+ * @brief 任务优先级枚举
+ *
+ * 定义任务的优先级级别，数值越小优先级越高
+ */
+typedef enum {
+    TASK_PRIORITY_HIGH = 0,   /**< 高优先级任务 */
+    TASK_PRIORITY_NORMAL = 5, /**< 普通优先级任务 */
+    TASK_PRIORITY_LOW = 10,   /**< 低优先级任务 */
+    TASK_PRIORITY_BACKGROUND = 15 /**< 后台任务，最低优先级 */
+} task_priority_t;
+
+/**
  * @struct task_t
  * @brief 表示将由线程池执行的任务。
  *
@@ -50,6 +62,7 @@ typedef struct {
     void (*function)(void *arg); /**< 指向要执行的函数的指针。 */
     void *arg;                   /**< 要传递给函数的参数。 */
     char task_name[MAX_TASK_NAME_LEN]; /**< 任务的名称，用于日志记录/监控。以空字符结尾。 */
+    task_priority_t priority;    /**< 任务的优先级，决定执行顺序 */
 } task_t;
 
 /**
@@ -83,11 +96,28 @@ thread_pool_t thread_pool_create(int num_threads);
  * @param arg 要传递给任务函数的参数。如果函数期望，可以为 NULL。
  * @param task_name 任务的描述性名称。如果为 NULL，将使用 "unnamed_task"。
  *                  该名称被复制到任务结构中。
+ * @param priority 任务的优先级，决定执行顺序。默认为 TASK_PRIORITY_NORMAL。
  * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
  *         池正在关闭，任务节点的内存分配失败)。
  */
 int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg,
-                         const char *task_name);
+                         const char *task_name, task_priority_t priority);
+
+/**
+ * @brief向线程池的队列中添加一个新任务（使用默认优先级）。
+ *
+ * 该任务将被一个可用的工作线程拾取以执行，使用TASK_PRIORITY_NORMAL优先级。
+ *
+ * @param pool 指向 thread_pool_t 实例的指针。
+ * @param function 指向定义任务的函数的指针。不能为空。
+ * @param arg 要传递给任务函数的参数。如果函数期望，可以为 NULL。
+ * @param task_name 任务的描述性名称。如果为 NULL，将使用 "unnamed_task"。
+ *                  该名称被复制到任务结构中。
+ * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
+ *         池正在关闭，任务节点的内存分配失败)。
+ */
+int thread_pool_add_task_default(thread_pool_t pool, void (*function)(void *), void *arg,
+                                const char *task_name);
 
 /**
  * @brief 销毁线程池。

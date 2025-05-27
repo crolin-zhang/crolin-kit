@@ -145,7 +145,7 @@ static int test_basic_functionality(void)
         // 使用随机概率决定任务类型，大约20%的概率是长任务
         void (*task_func)(void *) = (get_random_int(1, 100) <= 20) ? long_task : test_task;
         
-        int result = thread_pool_add_task(pool, task_func, arg, task_name);
+        int result = thread_pool_add_task_default(pool, task_func, arg, task_name);
         if (result != 0) {
             fprintf(stderr, "无法添加任务 %d\n", task_idx);
             free(arg);
@@ -286,7 +286,7 @@ static int test_error_handling(void)
     fflush(stdout);
     
     // 测试无效的线程池指针
-    int result = thread_pool_add_task(NULL, test_task, NULL, "invalid-pool");
+    int result = thread_pool_add_task_default(NULL, test_task, NULL, "invalid-pool");
     printf("测试向NULL线程池添加任务: %s\n", (result != 0) ? "测试通过" : "测试失败");
     fflush(stdout);
 

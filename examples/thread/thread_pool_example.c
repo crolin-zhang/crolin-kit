@@ -125,7 +125,7 @@ int main(void)
 
         TPOOL_LOG("Main: 正在添加任务 %s (参数指针: %p, 值: %d)", task_name_buf, (void *)task_arg,
                   *task_arg);
-        if (thread_pool_add_task(g_pool, my_task_function, task_arg, task_name_buf) != 0) {
+        if (thread_pool_add_task_default(g_pool, my_task_function, task_arg, task_name_buf) != 0) {
             TPOOL_ERROR("Main: 添加任务 %s 失败。正在释放参数。", task_name_buf);
             free(task_arg); // 如果任务添加失败，则释放参数
         } else {

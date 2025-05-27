@@ -154,7 +154,7 @@ static void test_thread_pool_resize(void)
         char task_name[32];
         snprintf(task_name, sizeof(task_name), "Task-%d", task_idx);
         
-        ret = thread_pool_add_task(pool, test_task, arg, task_name);
+        ret = thread_pool_add_task_default(pool, test_task, arg, task_name);
         if (ret != 0) {
             fprintf(stderr, "添加任务失败\n");
             free(arg);

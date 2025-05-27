@@ -21,10 +21,11 @@ static void *auto_adjust_thread_function(void *arg);
 // --- 任务队列管理函数 (内部) ---
 
 /**
- * @brief 向队列尾部添加任务 (内部函数)。
+ * @brief 按优先级向队列中添加任务 (内部函数)。
  *
  * 此函数假定调用者 (例如, `thread_pool_add_task`)
- * 持有池的锁。它分配一个新的任务节点并将其附加到队列。
+ * 持有池的锁。它分配一个新的任务节点并将其按优先级插入到队列中。
+ * 优先级值越小，优先级越高，将被插入到队列的更前面位置。
  *
  * @param pool 指向 thread_pool_s 实例的指针。
  * @param task 要入队的 task_t 数据。
@@ -40,16 +41,46 @@ static int task_enqueue_internal(thread_pool_t pool, task_t task)
     new_node->task = task; // 复制任务数据
     new_node->next = NULL;
 
-    if (pool->tail == NULL) { // 队列为空
+    if (pool->head == NULL) { // 队列为空
         pool->head = new_node;
         pool->tail = new_node;
     } else {
-        pool->tail->next = new_node;
-        pool->tail = new_node;
+        // 按优先级插入任务
+        // 优先级值越小，优先级越高，将被插入到队列的更前面位置
+        if (task.priority < pool->head->task.priority) {
+            // 如果新任务优先级高于队列头部任务，插入到队列头部
+            new_node->next = pool->head;
+            pool->head = new_node;
+        } else {
+            // 否则，找到合适的位置插入
+            task_node_t *current = pool->head;
+            task_node_t *previous = NULL;
+            
+            // 遍历队列，找到第一个优先级低于新任务的节点
+            while (current != NULL && current->task.priority <= task.priority) {
+                previous = current;
+                current = current->next;
+            }
+            
+            // 插入新节点
+            if (previous == NULL) { // 理论上不会发生，因为已经处理了头部插入的情况
+                new_node->next = pool->head;
+                pool->head = new_node;
+            } else {
+                new_node->next = previous->next;
+                previous->next = new_node;
+                
+                // 如果插入到了队列尾部，更新tail指针
+                if (previous == pool->tail) {
+                    pool->tail = new_node;
+                }
+            }
+        }
     }
+    
     pool->task_queue_size++;
-    TPOOL_LOG("任务 '%s' 已内部入队。线程池: %p, 队列大小: %d", task.task_name, (void *)pool,
-              pool->task_queue_size);
+    TPOOL_LOG("任务 '%s' (优先级:%d) 已按优先级入队。线程池: %p, 队列大小: %d", 
+              task.task_name, task.priority, (void *)pool, pool->task_queue_size);
 
     // 检查是否需要调整线程数 (在锁内进行)
     // 直接信号自动调整线程，避免多重嵌套锁定
@@ -702,48 +733,48 @@ thread_pool_t thread_pool_create(int num_threads)
  * @param arg 要传递给任务函数的参数。如果函数期望，可以为 NULL。
  * @param task_name 任务的描述性名称。如果为 NULL，将使用 "unnamed_task"。
  *                  该名称被复制到任务结构中。
+ * @param priority 任务的优先级，决定执行顺序。默认为 TASK_PRIORITY_NORMAL。
  * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
  *         池正在关闭，任务节点的内存分配失败)。
  */
 int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg,
-                         const char *task_name)
+                         const char *task_name, task_priority_t priority)
 {
     if (pool == NULL || function == NULL) {
-        // 不将函数指针转换为 void*，避免警告
-        TPOOL_ERROR("thread_pool_add_task: 池 (%p) 或函数指针为 NULL。", (void *)pool);
+        TPOOL_ERROR("thread_pool_add_task: 无效参数 (pool: %p, function: %p)", (void *)pool,
+                    (void *)function);
         return -1;
     }
 
     pthread_mutex_lock(&(pool->lock));
+
     if (pool->shutdown) {
+        TPOOL_ERROR("thread_pool_add_task: 尝试向正在关闭的线程池 %p 添加任务", (void *)pool);
         pthread_mutex_unlock(&(pool->lock));
-        TPOOL_ERROR("无法添加任务 '%s'：线程池 %p 正在关闭。", task_name ? task_name : "unnamed",
-                    (void *)pool);
         return -1;
     }
 
-    task_t new_task; // task_t 在 .h 中定义，其大小已知
-    new_task.function = function;
-    new_task.arg = arg;
+    // 准备任务数据
+    task_t task;
+    task.function = function;
+    task.arg = arg;
+    task.priority = priority; // 设置任务优先级
 
-    // 准备任务名称
-    if (task_name != NULL) {
-        strncpy(new_task.task_name, task_name, MAX_TASK_NAME_LEN - 1);
-        new_task.task_name[MAX_TASK_NAME_LEN - 1] = '\0'; // 确保空终止
+    // 复制任务名称，确保不会超出缓冲区
+    if (task_name == NULL) {
+        strncpy(task.task_name, "unnamed_task", MAX_TASK_NAME_LEN - 1);
     } else {
-        strncpy(new_task.task_name, "unnamed_task", MAX_TASK_NAME_LEN - 1);
-        new_task.task_name[MAX_TASK_NAME_LEN - 1] = '\0';
+        strncpy(task.task_name, task_name, MAX_TASK_NAME_LEN - 1);
+    }
+    task.task_name[MAX_TASK_NAME_LEN - 1] = '\0'; // 确保以空字符结尾
+
+    // 将任务添加到队列
+    int result = task_enqueue_internal(pool, task);
+    if (result == 0) {
+        // 通知一个等待的工作线程有新任务
+        pthread_cond_signal(&(pool->notify));
     }
 
-    // 内部将任务入队
-    if (task_enqueue_internal(pool, new_task) != 0) {
-        pthread_mutex_unlock(&(pool->lock));
-        // task_enqueue_internal 已记录错误
-        TPOOL_ERROR("未能将任务 '%s' 入队到线程池 %p。", new_task.task_name, (void *)pool);
-        return -1;
-    }
-
-    // 检查是否需要自动调整线程池大小
     // 释放锁以避免死锁
     pthread_mutex_unlock(&(pool->lock));
     
@@ -754,12 +785,27 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
         pthread_mutex_unlock(&pool->adjust_cond_lock);
     }
 
-    // 通知一个等待的工作线程
-    pthread_mutex_lock(&(pool->lock));
-    pthread_cond_signal(&(pool->notify));
-    pthread_mutex_unlock(&(pool->lock));
-    TPOOL_LOG("任务 '%s' 已添加到线程池 %p。已通知工作线程。", new_task.task_name, (void *)pool);
-    return 0;
+    TPOOL_LOG("任务 '%s' 已添加到线程池 %p。已通知工作线程。", task.task_name, (void *)pool);
+    return result;
+}
+
+/**
+ * @brief向线程池的队列中添加一个新任务（使用默认优先级）。
+ *
+ * 该任务将被一个可用的工作线程拾取以执行，使用TASK_PRIORITY_NORMAL优先级。
+ *
+ * @param pool 指向 thread_pool_t 实例的指针。
+ * @param function 指向定义任务的函数的指针。不能为空。
+ * @param arg 要传递给任务函数的参数。如果函数期望，可以为 NULL。
+ * @param task_name 任务的描述性名称。如果为 NULL，将使用 "unnamed_task"。
+ *                  该名称被复制到任务结构中。
+ * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
+ *         池正在关闭，任务节点的内存分配失败)。
+ */
+int thread_pool_add_task_default(thread_pool_t pool, void (*function)(void *), void *arg,
+                                const char *task_name)
+{
+    return thread_pool_add_task(pool, function, arg, task_name, TASK_PRIORITY_NORMAL);
 }
 
 /**

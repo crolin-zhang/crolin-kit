@@ -223,7 +223,7 @@ static void submit_tasks(thread_pool_t pool, int count, void (*task_func)(void *
             continue;
         }
         *arg = i;
-        if (thread_pool_add_task(pool, task_func, arg, "test_task") != 0) {
+        if (thread_pool_add_task_default(pool, task_func, arg, "test_task") != 0) {
             printf("添加任务失败\n");
             free(arg);
         }
