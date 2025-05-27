@@ -51,20 +51,25 @@ CrolinKit 是一个为嵌入式系统设计的多功能开发工具包，采用�
 │   └─ CMakeLists.txt    # 工具构建文件
 ├─ tests/                # 测试目录
 │   ├─ CMakeLists.txt    # 测试构建文件
-│   ├─ test_thread_pool.c # 测试程序
 │   └─ modules/           # 模块测试目录
 │       ├─ CMakeLists.txt  # 模块测试构建文件
 │       └─ thread/          # 线程模块测试
 │           ├─ CMakeLists.txt # 线程模块测试构建文件
 │           └─ src/           # 线程模块测试源代码
 │               ├─ CMakeLists.txt # 测试源代码构建文件
-│               └─ thread_unit_test.c # 线程模块单元测试
+│               ├─ thread_unit_test.c # 基本功能测试
+│               ├─ thread_resize_test.c # 线程池大小调整测试
+│               ├─ thread_pool_test.c # 线程池综合测试
+│               ├─ thread_debug_test.c # 线程池调试测试
+│               └─ thread_auto_adjust.c # 线程池自动调整测试
 ├─ examples/             # 示例目录
 │   ├─ CMakeLists.txt    # 示例构建文件
 │   ├─ thread_pool_example.c # 示例程序
 │   └─ thread/            # 线程模块示例
 │       ├─ CMakeLists.txt  # 线程模块示例构建文件
-│       └─ thread_example.c # 线程模块示例程序
+│       ├─ thread_example.c # 基本功能示例程序
+│       ├─ thread_resize_example.c # 线程池大小调整示例
+│       └─ thread_auto_adjust_example.c # 线程池自动调整示例
 ├─ tools/                # 工具目录
 │   ├─ CMakeLists.txt    # 工具构建文件
 │   └─ build/             # 构建工具
@@ -158,15 +163,18 @@ make
 cmake .. -DBUILD_TESTS=ON -DBUILD_EXAMPLES=ON
 make
 
-# 运行测试程序
-./tests/test_thread_pool
-
 # 运行模块测试
-./tests/modules/thread/src/thread_unit_test
+./tests/modules/thread/src/thread_unit_test    # 基本功能测试
+./tests/modules/thread/src/thread_resize_test  # 线程池大小调整测试
+./tests/modules/thread/src/thread_pool_test    # 线程池综合测试
+./tests/modules/thread/src/thread_debug_test   # 线程池调试测试
+./tests/modules/thread/src/thread_auto_adjust  # 线程池自动调整测试
 
 # 运行示例程序
 ./examples/thread_pool_example
 ./examples/thread/thread_example
+./examples/thread/thread_resize_example
+./examples/thread/thread_auto_adjust_example
 ```
 
 #### 交叉编译（以MIPS为例）
@@ -228,15 +236,40 @@ target_link_libraries(your_target PRIVATE CrolinKit::thread)
 
 ### 线程池模块优化
 
-当前线程池模块已经实现了基本功能，但还有以下优化空间：
+当前线程池模块已经实现了以下功能：
 
-1. **动态线程数调整**：根据任务队列长度和系统负载自动调整工作线程数量
-2. **任务优先级支持**：实现任务优先级队列，优先处理高优先级任务
-3. **任务取消机制**：支持取消尚未开始执行的任务
-4. **任务超时控制**：为任务设置最大执行时间，超时自动中断
-5. **性能监控**：添加线程池性能统计功能，如平均任务等待时间、执行时间等
-6. **线程亲和性**：支持设置线程CPU亲和性，提高缓存命中率
-7. **内存优化**：减少任务队列的内存分配次数，使用内存池技术
+- 基础线程池功能（创建、销毁、添加任务）
+- 动态线程数调整（手动或自动）
+- 线程池状态监控与统计
+- 运行任务名称查询
+- 线程池限制设置（最小/最大线程数）
+
+#### 近期修复内容
+
+- 修复内存管理问题：解决`thread_pool_resize`中`realloc`失败可能导致的内存泄漏
+- 增强线程创建失败时的资源回收和状态恢复
+- 改进`thread_pool_get_running_task_names`函数中的安全性检查
+- 添加完善的边界检查，防止缓冲区溢出和空指针访问
+- 优化线程池测试程序，增强随机化和稳定性：
+  - 随机化线程池初始大小（2-5个线程）
+  - 随机化任务执行时间（短任务10-50ms，长任务200-800ms）
+  - 随机化等待时间和超时设置
+  - 改进错误处理，从简单assert改为详细的错误检查和报告
+  - 实现自动退出机制，确保测试不会挂起
+  - 修复线程池自动调整测试的稳定性问题
+
+#### 计划中的功能增强
+
+1. **任务优先级支持**：实现任务优先级队列，优先处理高优先级任务
+2. **任务取消机制**：支持取消尚未开始执行的任务
+3. **任务超时控制**：为任务设置最大执行时间，超时自动中断
+4. **性能监控**：添加线程池性能统计功能，如平均任务等待时间、执行时间等
+5. **线程亲和性**：支持设置线程CPU亲和性，提高缓存命中率
+6. **内存优化**：减少任务队列的内存分配次数，使用内存池技术
+7. **线程池健康追踪**：提供详细的运行时状态信息和活动日志
+8. **故障自恢复**：自动检测和处理线程崩溃或卡死情况
+9. **垃圾回收机制**：处理长时间未完成或遗弃的任务
+10. **安全取消点**：支持在任务执行期间添加取消点，允许安全终止
 
 ### 日志模块优化
 
