@@ -1,0 +1,6 @@
+CompileFlags:
+  Add: 
+    - "-I/home/crolin/work/git/crolin-kit/src/core/thread/include"
+    - "-I/home/crolin/work/git/crolin-kit/src/core/log/include"
+    - "-I/home/crolin/work/git/crolin-kit/build/include"
+  Compiler: gcc
