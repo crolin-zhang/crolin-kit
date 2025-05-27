@@ -36,7 +36,7 @@ FormatStyle: file
 # 用户宏
 CheckOptions:
   - key: readability-identifier-naming.StructCase
-    value: CamelCase
+    value: lower_case
   - key: readability-identifier-naming.FunctionCase
     value: lower_case
   - key: readability-identifier-naming.VariableCase

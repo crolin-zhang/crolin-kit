@@ -79,7 +79,7 @@ static int task_enqueue_internal(thread_pool_t pool, task_t task)
     }
     
     pool->task_queue_size++;
-    TPOOL_LOG("任务 '%s' (优先级:%d) 已按优先级入队。线程池: %p, 队列大小: %d", 
+    TPOOL_DEBUG("任务 '%s' (优先级:%d) 已按优先级入队。线程池: %p, 队列大小: %d", 
               task.task_name, task.priority, (void *)pool, pool->task_queue_size);
 
     // 检查是否需要调整线程数 (在锁内进行)
@@ -87,7 +87,7 @@ static int task_enqueue_internal(thread_pool_t pool, task_t task)
     if (pool->auto_adjust) {
         // 如果队列大小增加，可能需要增加线程
         if (pool->task_queue_size > pool->high_watermark && pool->thread_count < pool->max_threads) {
-            TPOOL_LOG("任务入队触发自动调整检查：任务队列大小 %d > 高水位 %d", 
+            TPOOL_DEBUG("任务入队触发自动调整检查：任务队列大小 %d > 高水位 %d", 
                      pool->task_queue_size, pool->high_watermark);
             // 向自动调整线程发送信号，让它检查是否需要调整线程池大小
             pthread_mutex_lock(&pool->adjust_cond_lock);
@@ -114,7 +114,7 @@ static int task_enqueue_internal(thread_pool_t pool, task_t task)
 static task_t *task_dequeue_internal(thread_pool_t pool)
 {
     if (pool->head == NULL) { // 防御性检查，尽管调用者应确保队列不为空。
-        TPOOL_LOG("task_dequeue_internal: 尝试从线程池 %p 的空队列中出队。", (void *)pool);
+        TPOOL_TRACE("task_dequeue_internal: 尝试从线程池 %p 的空队列中出队。", (void *)pool);
         return NULL;
     }
 
@@ -137,7 +137,7 @@ static task_t *task_dequeue_internal(thread_pool_t pool)
         pool->tail = NULL; // 队列变为空
     }
     pool->task_queue_size--;
-    TPOOL_LOG("任务 '%s' 已从线程池 %p 内部出队。队列大小: %d", dequeued_task_data->task_name,
+    TPOOL_DEBUG("任务 '%s' 已从线程池 %p 内部出队。队列大小: %d", dequeued_task_data->task_name,
               (void *)pool, pool->task_queue_size);
 
     free(node_to_dequeue);     // 释放队列节点本身
@@ -175,7 +175,7 @@ static void task_queue_destroy_internal(thread_pool_t pool)
     pool->head = NULL;
     pool->tail = NULL;
     pool->task_queue_size = 0;
-    TPOOL_LOG("线程池 %p 的内部任务队列已销毁。%d 个节点已释放。", (void *)pool, count);
+    TPOOL_DEBUG("线程池 %p 的内部任务队列已销毁。%d 个节点已释放。", (void *)pool, count);
 }
 
 // --- 工作线程函数 ---
@@ -208,11 +208,11 @@ static void *worker_thread_function(void *arg)
     // 循环直到池关闭且队列为空，或者线程被标记为退出
     while (1) {
         pthread_mutex_lock(&(pool->lock));
-        TPOOL_LOG("工作线程 #%d (线程池 %p): 已锁定池。", thread_id, (void *)pool);
+        TPOOL_TRACE("工作线程 #%d (线程池 %p): 已锁定池。", thread_id, (void *)pool);
 
         // 检查线程ID是否超出范围（可能在调整大小后发生）
         if (thread_id >= pool->thread_count) {
-            TPOOL_LOG("工作线程 #%d (线程池 %p): 线程ID超出范围（当前线程数: %d），准备退出", thread_id,
+            TPOOL_DEBUG("工作线程 #%d (线程池 %p): 线程ID超出范围（当前线程数: %d），准备退出", thread_id,
                       (void *)pool, pool->thread_count);
             // 在此处不立即退出，让线程继续等待通知，在收到通知后再检查是否需要退出
         }
@@ -231,7 +231,7 @@ static void *worker_thread_function(void *arg)
             if (wait_result == ETIMEDOUT) {
                 // 超时后，检查一下队列是否有新任务，可能信号丢失
                 if (pool->task_queue_size > 0) {
-                    TPOOL_LOG("工作线程 #%d (线程池 %p): 等待超时但发现有任务，继续处理", 
+                    TPOOL_DEBUG("工作线程 #%d (线程池 %p): 等待超时但发现有任务，继续处理", 
                              thread_id, (void *)pool);
                     break;
                 }
@@ -240,7 +240,7 @@ static void *worker_thread_function(void *arg)
                 timeout.tv_sec += 1;
             }
         }
-        TPOOL_LOG("工作线程 #%d (线程池 %p): 已被唤醒。", thread_id, (void *)pool);
+        TPOOL_TRACE("工作线程 #%d (线程池 %p): 已被唤醒。", thread_id, (void *)pool);
 
         // 检查是否应该退出（增加对线程ID范围的检查）
         if ((pool->shutdown && pool->task_queue_size == 0) ||
@@ -249,7 +249,7 @@ static void *worker_thread_function(void *arg)
             // 如果是空闲状态，减少空闲线程计数
             if (thread_id < pool->thread_count && pool->thread_status[thread_id] == 0) {
                 pool->idle_threads--;
-                TPOOL_LOG("工作线程 #%d (线程池 %p): 退出前减少空闲线程计数，当前空闲线程数: %d",
+                TPOOL_DEBUG("工作线程 #%d (线程池 %p): 退出前减少空闲线程计数，当前空闲线程数: %d",
                           thread_id, (void *)pool, pool->idle_threads);
             }
 
@@ -289,7 +289,7 @@ static void *worker_thread_function(void *arg)
         // 标记为忙碌
         if (pool->thread_status[thread_id] == 0) { // 如果是空闲状态
             pool->idle_threads--;
-            TPOOL_LOG("工作线程 #%d (线程池 %p): 设置为忙碌，空闲线程数: %d", thread_id,
+            TPOOL_DEBUG("工作线程 #%d (线程池 %p): 设置为忙碌，空闲线程数: %d", thread_id,
                       (void *)pool, pool->idle_threads);
         }
         pool->thread_status[thread_id] = 1; // 设置为忙碌
@@ -298,19 +298,19 @@ static void *worker_thread_function(void *arg)
         // 使用snprintf而不是strncpy，避免编译器警告
         snprintf(pool->running_task_names[thread_id], MAX_TASK_NAME_LEN, "%s", task->task_name);
 
-        TPOOL_LOG("工作线程 #%d (线程池 %p): 出队任务 '%s'。", thread_id, (void *)pool,
+        TPOOL_DEBUG("工作线程 #%d (线程池 %p): 出队任务 '%s'。", thread_id, (void *)pool,
                   task->task_name);
 
         // 解锁池，允许其他线程访问
         pthread_mutex_unlock(&(pool->lock));
-        TPOOL_LOG("工作线程 #%d (线程池 %p): 已解锁池，开始任务 '%s'。", thread_id, (void *)pool,
+        TPOOL_DEBUG("工作线程 #%d (线程池 %p): 开始任务 '%s'。", thread_id, (void *)pool,
                   task->task_name);
 
         // 执行任务
         (*(task->function))(task->arg);
 
         // 任务完成
-        TPOOL_LOG("工作线程 #%d (线程池 %p): 完成任务 '%s'。", thread_id, (void *)pool,
+        TPOOL_DEBUG("工作线程 #%d (线程池 %p): 完成任务 '%s'。", thread_id, (void *)pool,
                   task->task_name);
 
         // 释放任务结构
@@ -318,11 +318,11 @@ static void *worker_thread_function(void *arg)
 
         // 重新锁定池以设置状态为空闲
         pthread_mutex_lock(&(pool->lock));
-        TPOOL_LOG("工作线程 #%d (线程池 %p): 已锁定池以设置状态为闲置。", thread_id, (void *)pool);
+        TPOOL_TRACE("工作线程 #%d (线程池 %p): 已锁定池以设置状态为闲置。", thread_id, (void *)pool);
 
         // 检查线程ID是否仍然有效（可能在执行任务期间池被调整大小）
         if (thread_id >= pool->thread_count) {
-            TPOOL_LOG("工作线程 #%d (线程池 %p): 任务完成后发现线程ID超出范围（当前线程数: %d）。"
+            TPOOL_DEBUG("工作线程 #%d (线程池 %p): 任务完成后发现线程ID超出范围（当前线程数: %d）。"
                      "将在下一次循环优雅退出。",
                      thread_id, (void *)pool, pool->thread_count);
             // 不立即退出，先解锁并在下一个循环中优雅退出
@@ -335,7 +335,7 @@ static void *worker_thread_function(void *arg)
         if (pool->thread_status[thread_id] != 0) { // 如果不是已经空闲
             pool->thread_status[thread_id] = 0;
             // 状态更新已在 pool->lock 保护下
-            TPOOL_LOG("工作线程 #%d (线程池 %p): 任务完成，准备更新状态为闲置。", thread_id,
+            TPOOL_DEBUG("工作线程 #%d (线程池 %p): 任务完成，准备更新状态为闲置。", thread_id,
                       (void *)pool);
             strncpy(pool->running_task_names[thread_id], "[idle]", MAX_TASK_NAME_LEN - 1);
             pool->running_task_names[thread_id][MAX_TASK_NAME_LEN - 1] = '\0';
@@ -347,7 +347,7 @@ static void *worker_thread_function(void *arg)
             if (pool->auto_adjust) {
                 // 如果空闲线程数量超过低水位线，可能需要减少线程
                 if (pool->idle_threads > pool->low_watermark && pool->thread_count > pool->min_threads) {
-                    TPOOL_LOG("工作线程 #%d (线程池 %p): 触发自动调整检查，空闲线程数 %d > 低水位 %d",
+                    TPOOL_DEBUG("工作线程 #%d (线程池 %p): 触发自动调整检查，空闲线程数 %d > 低水位 %d",
                               thread_id, (void *)pool, pool->idle_threads, pool->low_watermark);
                     
                     // 暂时释放线程池锁，防止死锁
@@ -377,13 +377,13 @@ static void *worker_thread_function(void *arg)
             // 任务为 NULL，但没有关闭。这表示 task_dequeue_internal 失败 (例如，malloc)。
             // task_dequeue_internal 会记录错误。
             // 工作线程继续循环并将重新评估条件。
-            TPOOL_LOG("工作线程 #%d (线程池 %p): 发现任务为 NULL，但未关闭。将重新等待。",
+            TPOOL_DEBUG("工作线程 #%d (线程池 %p): 发现任务为 NULL，但未关闭。将重新等待。",
                       thread_id, (void *)pool);
         }
         // 任务完成或状态变更，唤醒其他线程查看是否有新任务
         pthread_cond_broadcast(&(pool->notify));
         pthread_mutex_unlock(&(pool->lock));
-        TPOOL_LOG("工作线程 #%d (线程池 %p): 已解锁池，继续循环。", thread_id, (void *)pool);
+        TPOOL_TRACE("工作线程 #%d (线程池 %p): 已解锁池，继续循环。", thread_id, (void *)pool);
     }
     return NULL; // 应该无法到达
 }
@@ -410,7 +410,7 @@ static void *auto_adjust_thread_function(void *arg)
         return NULL;
     }
 
-    TPOOL_LOG("自动调整线程 (线程池 %p): 已启动。调整间隔: %d ms。", (void *)pool,
+    TPOOL_DEBUG("自动调整线程 (线程池 %p): 已启动。调整间隔: %d ms。", (void *)pool,
               pool->adjust_interval);
 
     pthread_mutex_lock(&pool->adjust_cond_lock);
@@ -418,7 +418,7 @@ static void *auto_adjust_thread_function(void *arg)
     while (pool->adjust_thread_running) {
         // 首先检查线程池是否已请求关闭
         if (pool->shutdown) {
-            TPOOL_LOG("自动调整线程 (线程池 %p): 检测到池已关闭，正在退出。", (void *)pool);
+            TPOOL_DEBUG("自动调整线程 (线程池 %p): 检测到池已关闭，正在退出。", (void *)pool);
             break;
         }
         
@@ -438,20 +438,20 @@ static void *auto_adjust_thread_function(void *arg)
             timeout_spec.tv_nsec -= 1000000000L;
         }
 
-        TPOOL_LOG("\u81ea\u52a8\u8c03\u6574\u7ebf\u7a0b (\u7ebf\u7a0b\u6c60 %p): \u7b49\u5f85 %d ms \u6216\u4fe1\u53f7...", (void *)pool,
+        TPOOL_TRACE("自动调整线程 (线程池 %p): 等待 %d ms 或信号...", (void *)pool,
                   pool->adjust_interval);
         int wait_result = pthread_cond_timedwait(&pool->adjust_cond, &pool->adjust_cond_lock, &timeout_spec);
 
         // \u4f7f\u7528 wait_result \u7684\u7ed3\u679c\u6765\u4e00\u4e9b\u540e\u7eed\u6761\u4ef6\u7684\u60c5\u51b5
         if (wait_result == ETIMEDOUT) {
-            TPOOL_LOG("自动调整线程 (线程池 %p): 等待超时。", (void *)pool);
+            TPOOL_TRACE("自动调整线程 (线程池 %p): 等待超时。", (void *)pool);
         } else if (wait_result != 0) {
             TPOOL_ERROR("自动调整线程 (线程池 %p): pthread_cond_timedwait 失败。errno: %d (%s)。", (void *)pool, errno, strerror(errno));
         }
 
         // \u518d\u6b21\u68c0\u67e5\u7ebf\u7a0b\u6c60\u72b6\u6001
         if (!pool->adjust_thread_running || pool->shutdown) {
-            TPOOL_LOG("自动调整线程 (线程池 %p): 收到退出信号，循环终止。", (void *)pool);
+            TPOOL_DEBUG("自动调整线程 (线程池 %p): 收到退出信号，循环终止。", (void *)pool);
             break;
         }
 
@@ -465,21 +465,21 @@ static void *auto_adjust_thread_function(void *arg)
             int idle = pool->idle_threads;
             int target_threads = current_threads;
             
-            TPOOL_LOG("自动调整检查: 当前线程=%d, 任务队列=%d (高水位=%d), 空闲线程=%d (低水位=%d), "
-                     "最小线程=%d, 最大线程=%d",
-                     current_threads, tasks_in_queue, pool->high_watermark, idle, pool->low_watermark,
-                     pool->min_threads, pool->max_threads);
+            TPOOL_DEBUG("自动调整检查: 当前线程=%d, 任务队列=%d (高水位=%d), 空闲线程=%d (低水位=%d), "
+                      "最小线程=%d, 最大线程=%d",
+                      current_threads, tasks_in_queue, pool->high_watermark,
+                      idle, pool->low_watermark, pool->min_threads, pool->max_threads);
             
             // 检查是否需要增加线程
             if (tasks_in_queue > pool->high_watermark && current_threads < pool->max_threads) {
                 target_threads = current_threads + 1;
-                TPOOL_LOG("自动调整: 任务队列 (%d) > 高水位 (%d)。建议增加线程数至 %d。", 
+                TPOOL_DEBUG("自动调整: 任务队列 (%d) > 高水位 (%d)。建议增加线程数至 %d。", 
                           tasks_in_queue, pool->high_watermark, target_threads);
             }
             // 检查是否需要减少线程
             else if (idle > pool->low_watermark && current_threads > pool->min_threads) {
                 target_threads = current_threads - 1;
-                TPOOL_LOG("自动调整: 空闲线程 (%d) > 低水位 (%d)。建议减少线程数至 %d。", 
+                TPOOL_DEBUG("自动调整: 空闲线程 (%d) > 低水位 (%d)。建议减少线程数至 %d。", 
                           idle, pool->low_watermark, target_threads);
             }
             
@@ -495,7 +495,7 @@ static void *auto_adjust_thread_function(void *arg)
                 
                 // 再次检查有效性
                 if (target_threads != current_threads) {
-                    TPOOL_LOG("自动调整: 决定调整线程数从 %d 到 %d。", current_threads, target_threads);
+                    TPOOL_DEBUG("自动调整: 决定调整线程数从 %d 到 %d。", current_threads, target_threads);
                     
                     // 保存目标线程数并释放锁，防止死锁
                     int resize_target = target_threads;
@@ -522,7 +522,7 @@ static void *auto_adjust_thread_function(void *arg)
     }
 
     pthread_mutex_unlock(&pool->adjust_cond_lock);
-    TPOOL_LOG("自动调整线程 (线程池 %p): 已退出。", (void *)pool);
+    TPOOL_DEBUG("自动调整线程 (线程池 %p): 已退出。", (void *)pool);
     return NULL;
 }
 
@@ -542,11 +542,32 @@ thread_pool_t thread_pool_create(int num_threads)
     // 确保日志模块已初始化
     static int log_initialized = 0;
     if (!log_initialized) {
-        log_init("thread_pool.log", LOG_LEVEL_INFO);
+        // 获取环境变量中设置的日志级别
+        const char *log_level_str = getenv("LOG_LEVEL");
+        log_level_t level = LOG_LEVEL_INFO; // 默认使用 INFO 级别
+        
+        if (log_level_str != NULL) {
+            if (strcasecmp(log_level_str, "FATAL") == 0) {
+                level = LOG_LEVEL_FATAL;
+            } else if (strcasecmp(log_level_str, "ERROR") == 0) {
+                level = LOG_LEVEL_ERROR;
+            } else if (strcasecmp(log_level_str, "WARN") == 0) {
+                level = LOG_LEVEL_WARN;
+            } else if (strcasecmp(log_level_str, "INFO") == 0) {
+                level = LOG_LEVEL_INFO;
+            } else if (strcasecmp(log_level_str, "DEBUG") == 0) {
+                level = LOG_LEVEL_DEBUG;
+            } else if (strcasecmp(log_level_str, "TRACE") == 0) {
+                level = LOG_LEVEL_TRACE;
+            }
+        }
+        
+        // 使用环境变量中设置的日志级别初始化日志模块
+        log_init("thread_pool.log", level);
         log_initialized = 1;
     }
 
-    TPOOL_LOG("尝试创建包含 %d 个线程的线程池。", num_threads);
+    TPOOL_DEBUG("尝试创建包含 %d 个线程的线程池。", num_threads);
     if (num_threads <= 0) {
         TPOOL_ERROR("线程数必须为正。请求数: %d", num_threads);
         return NULL;
@@ -716,7 +737,7 @@ thread_pool_t thread_pool_create(int num_threads)
             free(pool);
             return NULL;
         }
-        TPOOL_LOG("已为线程池 %p 成功创建工作线程 #%d。", i, (void *)pool);
+        TPOOL_DEBUG("已为线程池 %p 成功创建工作线程 #%d。", (void *)pool, i);
         pool->started++; // 增加成功启动的线程计数
     }
     TPOOL_LOG("线程池 %p 已成功创建，包含 %d 个线程。", (void *)pool, pool->started);
@@ -785,7 +806,7 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
         pthread_mutex_unlock(&pool->adjust_cond_lock);
     }
 
-    TPOOL_LOG("任务 '%s' 已添加到线程池 %p。已通知工作线程。", task.task_name, (void *)pool);
+    TPOOL_DEBUG("任务 '%s' 已添加到线程池 %p。已通知工作线程。", task.task_name, (void *)pool);
     return result;
 }
 
@@ -874,7 +895,7 @@ int thread_pool_enable_auto_adjust(thread_pool_t pool, int high_watermark, int l
     }
 
     if (pool->auto_adjust) {
-        TPOOL_LOG("线程池 %p 自动调整已启用。正在使用新参数更新...", (void *)pool);
+        TPOOL_DEBUG("线程池 %p 自动调整已启用。正在使用新参数更新...", (void *)pool);
         pthread_mutex_lock(&pool->adjust_cond_lock);
         pool->high_watermark = high_watermark;
         pool->low_watermark = low_watermark;
@@ -882,7 +903,7 @@ int thread_pool_enable_auto_adjust(thread_pool_t pool, int high_watermark, int l
         pthread_cond_signal(&pool->adjust_cond);
         pthread_mutex_unlock(&pool->adjust_cond_lock);
         pthread_mutex_unlock(&pool->lock); // 释放外层 pool->lock
-        TPOOL_LOG("线程池 %p 自动调整参数已更新。high_wm=%d, low_wm=%d, interval=%dms",
+        TPOOL_DEBUG("线程池 %p 自动调整参数已更新。high_wm=%d, low_wm=%d, interval=%dms",
                   high_watermark, low_watermark, adjust_interval);
         return 0;
     }
@@ -966,7 +987,7 @@ int thread_pool_destroy(thread_pool_t pool)
 
     // 如果已经关闭，直接返回
     if (pool->shutdown) {
-        TPOOL_LOG("thread_pool_destroy: 线程池 %p 已经关闭。", (void *)pool);
+        TPOOL_DEBUG("thread_pool_destroy: 线程池 %p 已经关闭。", (void *)pool);
         return 0;
     }
 
@@ -999,7 +1020,7 @@ int thread_pool_destroy(thread_pool_t pool)
 
     // 标记线程池为关闭状态
     pool->shutdown = 1;
-    TPOOL_LOG("thread_pool_destroy: 线程池 %p 已标记为关闭。正在向所有工作线程广播。",
+    TPOOL_DEBUG("thread_pool_destroy: 线程池 %p 已标记为关闭。正在向所有工作线程广播。",
               (void *)pool);
 
     // 广播给所有等待的线程
@@ -1031,7 +1052,7 @@ int thread_pool_destroy(thread_pool_t pool)
 
     // 如果存在自动调整线程，先处理它
     if (pool->adjust_thread != 0) {
-        TPOOL_LOG("thread_pool_destroy: 正在连接自动调整线程 (ID: %lu)", 
+        TPOOL_DEBUG("thread_pool_destroy: 正在连接自动调整线程 (ID: %lu)", 
                  (unsigned long)pool->adjust_thread);
 
         // 使用超时机制来连接自动调整线程
@@ -1047,7 +1068,7 @@ int thread_pool_destroy(thread_pool_t pool)
         // 尝试连接自动调整线程
         int join_result = pthread_join(pool->adjust_thread, NULL);
         if (join_result == 0) {
-            TPOOL_LOG("thread_pool_destroy: 自动调整线程已成功连接。");
+            TPOOL_DEBUG("thread_pool_destroy: 自动调整线程已成功连接。");
         } else {
             TPOOL_ERROR("thread_pool_destroy: 连接自动调整线程失败: %s", 
                        strerror(join_result));
@@ -1055,7 +1076,7 @@ int thread_pool_destroy(thread_pool_t pool)
             pthread_cancel(pool->adjust_thread);
             join_result = pthread_join(pool->adjust_thread, NULL);
             if (join_result == 0) {
-                TPOOL_LOG("thread_pool_destroy: 自动调整线程在取消后成功连接。");
+                TPOOL_DEBUG("thread_pool_destroy: 自动调整线程在取消后成功连接。");
             } else {
                 TPOOL_ERROR("thread_pool_destroy: 无法在取消后连接自动调整线程: %s", 
                            strerror(join_result));
@@ -1071,7 +1092,7 @@ int thread_pool_destroy(thread_pool_t pool)
             continue; // 跳过无效线程ID
         }
 
-        TPOOL_LOG("thread_pool_destroy: 正在连接线程池 %p 的线程 #%d (ID: %lu)。", (void *)pool, i,
+        TPOOL_DEBUG("thread_pool_destroy: 正在连接线程池 %p 的线程 #%d (ID: %lu)。", (void *)pool, i,
                   (unsigned long)pool->threads[i]);
 
         // 创建一个单独的线程来处理连接
@@ -1102,7 +1123,7 @@ int thread_pool_destroy(thread_pool_t pool)
         if (join_result == 0) {
             // 成功连接
             join_attempted = 1;
-            TPOOL_LOG("thread_pool_destroy: 线程 #%d (ID: %lu) 已成功连接。", i,
+            TPOOL_DEBUG("thread_pool_destroy: 线程 #%d (ID: %lu) 已成功连接。", i,
                       (unsigned long)thread_id);
         } else {
             // 连接失败，可能是线程已经分离或其他原因
@@ -1128,7 +1149,7 @@ int thread_pool_destroy(thread_pool_t pool)
             // 再次尝试连接，设置短超时
             join_result = pthread_join(thread_id, NULL);
             if (join_result == 0) {
-                TPOOL_LOG("thread_pool_destroy: 线程 #%d (ID: %lu) 在取消后成功连接。", i,
+                TPOOL_DEBUG("thread_pool_destroy: 线程 #%d (ID: %lu) 在取消后成功连接。", i,
                           (unsigned long)thread_id);
             } else {
                 TPOOL_ERROR("thread_pool_destroy: 无法在取消后连接线程 #%d (ID: %lu): %s", i,
@@ -1155,7 +1176,7 @@ int thread_pool_destroy(thread_pool_t pool)
         }
     }
     free(pool->running_task_names);
-    TPOOL_LOG("已清理线程池 %p 的 running_task_names。", (void *)pool);
+    TPOOL_DEBUG("已清理线程池 %p 的 running_task_names。", (void *)pool);
 
     // 在释放池之前记录日志，避免释放后使用
     TPOOL_LOG("线程池 (%p) 即将销毁。", (void *)pool);
@@ -1210,11 +1231,11 @@ int thread_pool_resize(thread_pool_t pool, int new_thread_count)
     }
 
     int old_thread_count = pool->thread_count;
-    TPOOL_LOG("Resizing thread pool %p from %d to %d threads.", (void *)pool, old_thread_count,
+    TPOOL_DEBUG("Resizing thread pool %p from %d to %d threads.", (void *)pool, old_thread_count,
               new_thread_count);
 
     if (new_thread_count == old_thread_count) {
-        TPOOL_LOG("thread_pool_resize: new_thread_count is the same as current for pool %p, no "
+        TPOOL_DEBUG("thread_pool_resize: new_thread_count is the same as current for pool %p, no "
                   "action needed.",
                   (void *)pool);
         pthread_mutex_unlock(&(pool->lock));
@@ -1315,7 +1336,7 @@ int thread_pool_resize(thread_pool_t pool, int new_thread_count)
                 pthread_mutex_unlock(&(pool->resize_lock));
                 return -1;
             }
-            TPOOL_LOG("Thread %d (ID: %lu) created successfully for pool %p.", i,
+            TPOOL_DEBUG("Thread %d (ID: %lu) created successfully for pool %p.", i,
                       (unsigned long)pool->threads[i], (void *)pool);
             pool->idle_threads++;
             pool->started++;
@@ -1336,7 +1357,7 @@ int thread_pool_resize(thread_pool_t pool, int new_thread_count)
     pthread_mutex_unlock(&(pool->lock));
     pthread_mutex_unlock(&(pool->resize_lock));
 
-    TPOOL_LOG("Thread pool %p successfully resized to %d threads (logical).", (void *)pool,
+    TPOOL_DEBUG("Thread pool %p successfully resized to %d threads (logical).", (void *)pool,
               new_thread_count);
     return 0;
 }
@@ -1544,7 +1565,7 @@ int thread_pool_get_stats(thread_pool_t pool, thread_pool_stats_t *stats)
 
     pthread_mutex_unlock(&(pool->lock));
 
-    TPOOL_LOG("thread_pool_get_stats: 线程池 %p: 总线程=%d, 最小=%d, 最大=%d, 空闲=%d, 队列=%d, "
+    TPOOL_DEBUG("thread_pool_get_stats: 线程池 %p: 总线程=%d, 最小=%d, 最大=%d, 空闲=%d, 队列=%d, "
               "已启动=%d",
               (void *)pool, stats->thread_count, stats->min_threads, stats->max_threads,
               stats->idle_threads, stats->task_queue_size, stats->started);
@@ -1579,7 +1600,7 @@ int thread_pool_disable_auto_adjust(thread_pool_t pool)
     // 为简单起见，我们依赖 adjust_thread_running，它在 enable 时设置，在 disable 时清除。
 
     if (pool->adjust_thread_running) {
-        TPOOL_LOG("线程池 %p 正在停止自动调整线程...", (void *)pool);
+        TPOOL_DEBUG("线程池 %p 正在停止自动调整线程...", (void *)pool);
         pool->adjust_thread_running = 0; // 请求线程停止
 
         // 必须在解锁 pool->lock 之后再操作 adjust_cond_lock 和 join，以避免死锁
@@ -1622,7 +1643,7 @@ int thread_pool_disable_auto_adjust(thread_pool_t pool)
             #endif
             // 即使 join 失败，也尝试清理资源
         } else {
-            TPOOL_LOG("自动调整线程 (线程池 %p) 已成功 join。", (void *)pool);
+            TPOOL_DEBUG("自动调整线程 (线程池 %p) 已成功 join。", (void *)pool);
         }
 
         // 清理条件变量和锁
