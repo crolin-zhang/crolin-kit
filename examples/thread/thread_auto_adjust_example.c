@@ -189,7 +189,7 @@ int main(void)
     print_pool_stats(g_pool);
 
     // 等待用户中断
-    printf("\n示例程序正在运行中...\n");
+    printf("\n示例程序正在运行中...最多30s\n");
     printf("按 Ctrl+C 退出\n");
 
     // 主循环，最多运行30秒后自动退出

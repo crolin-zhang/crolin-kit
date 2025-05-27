@@ -1,9 +1,5 @@
 add_subdirectory(thread)
 add_subdirectory(log)
 
-add_executable(thread_pool_example thread_pool_example.c)
-target_link_libraries(thread_pool_example PRIVATE thread)
-target_include_directories(thread_pool_example PRIVATE 
-    ${CMAKE_BINARY_DIR}/include
-    ${CMAKE_SOURCE_DIR}/src/core/thread/include
-)
+# 注意：thread_pool_example.c已移动到thread子目录下
+# 所有线程池相关示例程序现在都在thread子目录中构建
