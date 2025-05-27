@@ -39,9 +39,10 @@ static int get_random_int(int min, int max) {
         
         // 尽管rand()随机性有限，但在这里只作为备用方案
         // 我们通过多次调用和异或操作增强其随机性
-        unsigned int r1 = (unsigned int)rand();
-        unsigned int r2 = (unsigned int)rand();
-        rand_val = r1 ^ (r2 << 15) ^ ((unsigned int)clock() << 3);
+        // 注意：这里使用rand()是因为getrandom()失败时的备用方案
+        unsigned int rand_value1 = (unsigned int)rand(); // NOLINT(cert-msc30-c,cert-msc50-cpp)
+        unsigned int rand_value2 = (unsigned int)rand(); // NOLINT(cert-msc30-c,cert-msc50-cpp)
+        rand_val = rand_value1 ^ (rand_value2 << 15) ^ ((unsigned int)clock() << 3);
     }
     
     // 使用安全的转换方式，避免有符号整数的置换问题
@@ -156,7 +157,9 @@ int verify_thread_pool_state(thread_pool_t pool, int min_threads, int max_thread
                max_threads);
         return 0;
     }
-
+    
+    // 验证成功
+    printf("线程数验证成功: 当前=%d, 预期范围=[%d,%d]\n", stats.thread_count, min_threads, max_threads);
     return 1;
 }
 
@@ -208,15 +211,17 @@ static int test_pool_destroy(void)
     thread_pool_set_limits(pool, min_threads, max_threads);
 
     // 启用自动动态调整功能，随机化参数
-    int check_interval = get_random_int(2, 4);  // 随机检测间隔
-    int idle_threshold = get_random_int(1, 3); // 随机空闲阈值
-    int busy_threshold = 1000; // 保持固定的繁忙阈值
-    printf("启用自动动态调整: 检测间隔=%d秒, 空闲阈值=%d, 繁忙阈值=%d\n", 
-           check_interval, idle_threshold, busy_threshold);
-    thread_pool_enable_auto_adjust(pool, check_interval, idle_threshold, busy_threshold);
+    // 参数顺序：线程池、任务队列高水位、空闲线程高水位、调整间隔(毫秒)
+    int busy_threshold = 1000; // 任务队列高水位，当队列任务数量超过此值时增加线程
+    int idle_threshold = get_random_int(1, 3); // 空闲线程高水位，当空闲线程数量超过此值时减少线程
+    int adjust_interval = get_random_int(2, 4) * 1000;  // 调整间隔，毫秒单位
+    printf("启用自动动态调整: 任务队列高水位=%d, 空闲线程高水位=%d, 调整间隔=%d毫秒\n", 
+           busy_threshold, idle_threshold, adjust_interval);
+    // 正确的参数顺序：pool, busy_threshold(任务队列高水位), idle_threshold(空闲线程高水位), adjust_interval(调整间隔)
+    thread_pool_enable_auto_adjust(pool, busy_threshold, idle_threshold, adjust_interval);
 
-    // 初始状态验证
-    if (!verify_thread_pool_state(pool, 4, 4)) {
+    // 初始状态验证 - 使用初始线程数
+    if (!verify_thread_pool_state(pool, initial_threads, initial_threads)) {
         thread_pool_destroy(pool);
         return 0;
     }
@@ -241,8 +246,8 @@ static int test_pool_destroy(void)
     printf("等待 %d 毫秒...\n", wait_time);
     usleep(wait_time * 1000);
 
-    // 验证线程数已增加
-    verify_thread_pool_state(pool, 4, 8);
+    // 验证线程数在设置的范围内
+    verify_thread_pool_state(pool, min_threads, max_threads);
 
     // 等待所有任务完成
     int wait_count = 0;
