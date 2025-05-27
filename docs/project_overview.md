@@ -20,41 +20,72 @@
 - **线程池创建与销毁** - 支持创建指定数量的工作线程，并在不再需要时安全销毁
 - **任务队列管理** - 内部实现高效的任务队列，支持任务的添加和执行
 - **任务状态监控** - 支持查询当前正在执行的任务名称
+- **线程池大小动态调整** - 支持在运行时动态调整线程池大小
+- **线程池自动调整** - 根据负载自动调整线程数量，提高资源利用率
 - **优雅关闭机制** - 确保在关闭线程池时，已添加的任务能够完成执行
 
 ### 技术特点
 
-- **模块化设计** - 符合IPC SDK的目录结构，便于集成和维护
-- **线程安全** - 使用互斥锁和条件变量确保线程安全
+- **模块化设计** - 采用模块化结构，每个功能独立测试，便于集成和维护
+- **线程安全** - 使用互斥锁和条件变量确保线程安全，全面测试验证
 - **内存管理** - 细致的内存分配与释放，防止内存泄漏
-- **错误处理** - 全面的错误检查和日志记录
+- **错误处理** - 全面的错误检查和日志记录，包括边界条件测试
+- **高稳定性** - 经过全面测试和优化，确保在各种条件下稳定运行
 - **可扩展性** - 设计良好的API和内部结构，便于未来扩展功能
 
 ### 项目结构
 
 ```
 /
-├── CMakeLists.txt        # 顶层CMake构建文件
-├── thread/               # 线程池库核心实现
-│   ├── CMakeLists.txt    # 线程池库构建文件
-│   ├── include/
-│   │   └── thread.h         # 公共API头文件
-│   └── src/
-│       ├── thread.c         # 线程池实现
-│       └── thread_internal.h # 内部结构和函数声明
-├── tests/                # 测试目录
-│   ├── CMakeLists.txt    # 测试构建文件
-│   └── test_thread_pool.c # 测试程序
-├── examples/             # 示例目录
-│   ├── CMakeLists.txt    # 示例构建文件
-│   └── thread_pool_example.c # 示例程序
-└── docs/                 # 文档目录
-    ├── README.md          # 文档目录概述
-    ├── project_overview.md # 项目概述
-    ├── architecture.md     # 架构设计
-    ├── api_reference.md    # API参考
-    ├── user_guide.md       # 用户指南
-    └── test_report.md      # 测试报告
+├─ CMakeLists.txt        # 顶层CMake构建文件
+├─ .clangd               # clangd配置文件，改进IDE集成
+├─ cmake/                # CMake相关文件
+│   ├─ templates/         # 模板文件
+│   │   └─ version.h.in    # 版本头文件模板
+│   └─ toolchains/        # 交叉编译工具链
+│       └─ mips-linux-gnu.cmake # MIPS交叉编译工具链
+├─ src/                  # 源代码目录
+│   ├─ CMakeLists.txt    # 源代码构建文件
+│   └─ core/              # 核心模块目录
+│       ├─ CMakeLists.txt  # 核心模块构建文件
+│       └─ thread/          # 线程模块
+│           ├─ CMakeLists.txt # 线程模块构建文件
+│           ├─ include/       # 公共API头文件目录
+│           │   └─ thread.h    # 线程池API头文件
+│           └─ src/           # 源代码目录
+│               ├─ thread.c    # 线程池实现
+│               └─ thread_internal.h # 内部结构和函数声明
+├─ tools/                # 工具目录
+│   └─ CMakeLists.txt    # 工具构建文件
+├─ tests/                # 测试目录
+│   ├─ CMakeLists.txt    # 测试构建文件
+│   └─ modules/           # 模块测试目录
+│       ├─ CMakeLists.txt  # 模块测试构建文件
+│       └─ thread/          # 线程模块测试
+│           ├─ CMakeLists.txt # 线程模块测试构建文件
+│           └─ src/           # 线程模块测试源代码
+│               ├─ CMakeLists.txt # 测试源代码构建文件
+│               ├─ thread_unit_test.c # 基本功能测试
+│               ├─ thread_resize_test.c # 线程池大小调整测试
+│               ├─ thread_pool_test.c # 线程池综合测试
+│               ├─ thread_debug_test.c # 线程池调试测试
+│               └─ thread_auto_adjust.c # 线程池自动调整测试
+├─ examples/             # 示例目录
+│   ├─ CMakeLists.txt    # 示例构建文件
+│   ├─ thread_pool_example.c # 示例程序
+│   └─ thread/            # 线程模块示例
+│       ├─ CMakeLists.txt  # 线程模块示例构建文件
+│       ├─ thread_example.c # 基本功能示例程序
+│       ├─ thread_resize_example.c # 线程池大小调整示例
+│       └─ thread_auto_adjust_example.c # 线程池自动调整示例
+└─ docs/                 # 文档目录
+    ├─ README.md          # 文档目录概述
+    ├─ project_overview.md # 项目概述
+    ├─ architecture.md     # 架构设计
+    ├─ api_reference.md    # API参考
+    ├─ user_guide.md       # 用户指南
+    ├─ test_report.md      # 测试报告
+    └─ ide_integration.md  # IDE集成指南
 ```
 
 ## 使用场景
@@ -71,10 +102,12 @@
 
 线程池库计划在未来添加更多高级功能，包括：
 
-1. **任务优先级支持** - 允许为任务设置优先级，优先处理重要任务
-2. **任务完成通知机制** - 提供回调或其他机制通知任务完成
-3. **动态调整线程池大小** - 根据负载自动调整线程数量
-4. **性能监控与统计** - 提供更详细的性能指标和统计信息
+1. **内存管理模块** - 实现内存池和内存跟踪功能，提高内存使用效率
+2. **任务优先级支持** - 允许为任务设置优先级，优先处理重要任务
+3. **任务完成通知机制** - 提供回调或其他机制通知任务完成
+4. **异步日志功能** - 实现异步日志记录，减少日志对性能的影响
+5. **性能监控与统计** - 提供更详细的性能指标和统计信息
+6. **IPC通信模块** - 实现进程间通信机制，支持消息队列和共享内存
 
 ## 许可证
 
