@@ -19,12 +19,26 @@ typedef struct {
     void (*function)(void *arg); // 指向要执行的函数的指针
     void *arg;                   // 要传递给函数的参数
     char task_name[MAX_TASK_NAME_LEN]; // 任务的名称，用于日志记录/监控
+    task_priority_t priority;    // 任务的优先级，决定执行顺序
 } task_t;
 ```
 
-表示将由线程池执行的任务。包含函数指针、参数和任务名称。
+表示将由线程池执行的任务。包含函数指针、参数、任务名称和优先级。
 
 ## 常量
+
+### task_priority_t
+
+```c
+typedef enum {
+    TASK_PRIORITY_HIGH = 0,   /**< 高优先级任务 */
+    TASK_PRIORITY_NORMAL = 5, /**< 普通优先级任务 */
+    TASK_PRIORITY_LOW = 10,   /**< 低优先级任务 */
+    TASK_PRIORITY_BACKGROUND = 15 /**< 后台任务，最低优先级 */
+} task_priority_t;
+```
+
+任务优先级枚举，定义了四个优先级级别。数值越小优先级越高，在任务队列中会优先执行高优先级任务。
 
 ### MAX_TASK_NAME_LEN
 
@@ -73,7 +87,8 @@ if (pool == NULL) {
 ### thread_pool_add_task
 
 ```c
-int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg, const char *task_name);
+int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg,
+                         const char *task_name, task_priority_t priority);
 ```
 
 向线程池的队列中添加一个新任务。该任务将被一个可用的工作线程拾取以执行。
@@ -83,6 +98,7 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
 - `function`: 指向定义任务的函数的指针。不能为空。
 - `arg`: 要传递给任务函数的参数。如果函数期望，可以为`NULL`。
 - `task_name`: 任务的描述性名称。如果为`NULL`，将使用"unnamed_task"。该名称被复制到任务结构中。
+- `priority`: 任务的优先级。可以是`TASK_PRIORITY_HIGH`、`TASK_PRIORITY_NORMAL`、`TASK_PRIORITY_LOW`或`TASK_PRIORITY_BACKGROUND`。
 
 **返回值**:
 - 成功时返回0。
@@ -97,12 +113,28 @@ void my_task(void *arg) {
     free(arg); // 释放参数
 }
 
-// 添加任务到线程池
-int *arg = malloc(sizeof(int));
-*arg = 1;
-if (thread_pool_add_task(pool, my_task, arg, "Task-1") != 0) {
-    fprintf(stderr, "添加任务失败\n");
-    free(arg);
+// 添加高优先级任务到线程池
+int *arg1 = malloc(sizeof(int));
+*arg1 = 1;
+if (thread_pool_add_task(pool, my_task, arg1, "High-Priority-Task", TASK_PRIORITY_HIGH) != 0) {
+    fprintf(stderr, "添加高优先级任务失败\n");
+    free(arg1);
+}
+
+// 添加普通优先级任务到线程池
+int *arg2 = malloc(sizeof(int));
+*arg2 = 2;
+if (thread_pool_add_task(pool, my_task, arg2, "Normal-Priority-Task", TASK_PRIORITY_NORMAL) != 0) {
+    fprintf(stderr, "添加普通优先级任务失败\n");
+    free(arg2);
+}
+
+// 添加后台优先级任务到线程池
+int *arg3 = malloc(sizeof(int));
+*arg3 = 3;
+if (thread_pool_add_task(pool, my_task, arg3, "Background-Task", TASK_PRIORITY_BACKGROUND) != 0) {
+    fprintf(stderr, "添加后台任务失败\n");
+    free(arg3);
 }
 ```
 
@@ -298,25 +330,67 @@ if (thread_pool_destroy(pool) != 0) {
 }
 ```
 
-## 日志宏
+## 日志系统
 
-当定义了`DEBUG_THREAD_POOL`宏时，以下日志宏可用：
+线程池模块集成了多级别日志系统，支持不同详细程度的日志输出。日志级别可以通过环境变量`LOG_LEVEL`来控制。
 
-### TPOOL_LOG
+### 日志级别
+
+日志系统支持以下级别（从高到低）：
+
+- **ERROR**: 错误级别，用于记录严重错误和异常情况
+- **WARN**: 警告级别，用于记录可能存在的问题或异常情况
+- **INFO**: 信息级别，用于记录重要的状态变化和操作信息（默认级别）
+- **DEBUG**: 调试级别，用于记录详细的内部状态信息
+- **TRACE**: 跟踪级别，用于记录非常详细的内部状态和流程信息
+
+设置特定级别后，系统将输出该级别及以上级别的所有日志。例如，设置`LOG_LEVEL=DEBUG`将输出 DEBUG、INFO、WARN 和 ERROR 级别的日志。
+
+### 日志宏
+
+线程池模块提供了以下日志宏：
 
 ```c
-#define TPOOL_LOG(fmt, ...) fprintf(stderr, "[THREAD_POOL_LOG] " fmt "\n", ##__VA_ARGS__)
+// 用于调试日志消息的宏
+#define TPOOL_DEBUG(fmt, ...) LOG_DEBUG(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
+
+// 用于跟踪日志消息的宏
+#define TPOOL_TRACE(fmt, ...) LOG_TRACE(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
+
+// 用于一般日志消息的宏
+#define TPOOL_LOG(fmt, ...) LOG_INFO(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
+
+// 用于警告日志消息的宏
+#define TPOOL_WARN(fmt, ...) LOG_WARN(LOG_MODULE_THREAD, fmt, ##__VA_ARGS__)
+
+// 用于错误日志消息的宏
+#define TPOOL_ERROR(fmt, ...) LOG_ERROR(LOG_MODULE_THREAD, "(%s:%d) " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 ```
 
-用于一般日志消息的宏。仅当定义了`DEBUG_THREAD_POOL`时激活。打印到`stderr`。在消息前添加"[THREAD_POOL_LOG]"。
+### 日志级别控制
 
-### TPOOL_ERROR
+可以通过设置环境变量`LOG_LEVEL`来控制日志输出级别：
 
-```c
-#define TPOOL_ERROR(fmt, ...) fprintf(stderr, "[THREAD_POOL_ERROR] (%s:%d) " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+```bash
+# 设置为信息级别（默认）
+LOG_LEVEL=INFO ./your_program
+
+# 设置为调试级别，显示更多详细信息
+LOG_LEVEL=DEBUG ./your_program
+
+# 设置为跟踪级别，显示最详细的信息
+LOG_LEVEL=TRACE ./your_program
 ```
 
-用于错误日志消息的宏。仅当定义了`DEBUG_THREAD_POOL`时激活。打印到`stderr`。在消息前添加"[THREAD_POOL_ERROR] (file:line)"。
+### 日志输出示例
+
+以下是不同日志级别的输出示例：
+
+```
+[2025-05-27 18:39:24.988] [INFO] [TID:3914636] [THREAD] [thread.c:743] [thread_pool_create] 线程池 0x5de316d66af0 已成功创建，包含 4 个线程。
+[2025-05-27 18:39:24.989] [DEBUG] [TID:3914637] [THREAD] [thread.c:306] [worker_thread_function] 工作线程 #0 (线程池 0x5de316d66af0): 开始任务 '示例任务-1'。
+[2025-05-27 18:39:35.195] [TRACE] [TID:3914723] [THREAD] [thread.c:211] [worker_thread_function] 工作线程 #0 (线程池 0x5de316d66af0): 已锁定池。
+```。
 
 ## 完整使用示例
 
