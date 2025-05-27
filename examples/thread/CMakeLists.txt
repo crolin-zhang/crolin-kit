@@ -7,3 +7,8 @@ target_include_directories(thread_example PRIVATE ${CMAKE_BINARY_DIR}/include)
 add_executable(thread_resize_example thread_resize_example.c)
 target_link_libraries(thread_resize_example PRIVATE thread)
 target_include_directories(thread_resize_example PRIVATE ${CMAKE_BINARY_DIR}/include)
+
+# 线程池自动动态调整功能示例
+add_executable(thread_auto_adjust_example thread_auto_adjust_example.c)
+target_link_libraries(thread_auto_adjust_example PRIVATE thread)
+target_include_directories(thread_auto_adjust_example PRIVATE ${CMAKE_BINARY_DIR}/include)
