@@ -50,6 +50,9 @@ struct thread_pool_s {
                                      相应工作线程当前正在执行的任务的名称。
                                      每个字符串的最大长度为 MAX_TASK_NAME_LEN。 */
     int *thread_status; /**< 线程状态数组，0表示空闲，1表示忙碌，-1表示应该退出。 */
+    task_id_t *running_task_ids; /**< 数组，存储每个工作线程当前正在执行的任务ID。
+                                     值0表示线程当前没有执行任务。 */
+    task_id_t next_task_id;     /**< 下一个要分配的任务ID。从1开始递增，0保留为无效ID。 */
 
     /* 自动动态调整相关字段 */
     int auto_adjust;                    /**< 是否启用自动调整 (1=启用, 0=禁用) */

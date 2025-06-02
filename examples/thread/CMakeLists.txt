@@ -27,3 +27,8 @@ target_include_directories(thread_pool_example PRIVATE ${CMAKE_BINARY_DIR}/inclu
 add_executable(thread_priority_example thread_priority_example.c)
 target_link_libraries(thread_priority_example PRIVATE thread)
 target_include_directories(thread_priority_example PRIVATE ${CMAKE_BINARY_DIR}/include)
+
+# 线程池任务取消示例
+add_executable(thread_cancel_example thread_cancel_example.c)
+target_link_libraries(thread_cancel_example PRIVATE thread)
+target_include_directories(thread_cancel_example PRIVATE ${CMAKE_BINARY_DIR}/include)

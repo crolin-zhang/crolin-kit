@@ -293,6 +293,9 @@ static void *worker_thread_function(void *arg)
                       (void *)pool, pool->idle_threads);
         }
         pool->thread_status[thread_id] = 1; // 设置为忙碌
+        
+        // 记录正在执行的任务ID
+        pool->running_task_ids[thread_id] = task->id;
 
         // 更新运行任务名称 - 使用更安全的方式复制字符串
         // 使用snprintf而不是strncpy，避免编译器警告
@@ -339,6 +342,8 @@ static void *worker_thread_function(void *arg)
                       (void *)pool);
             strncpy(pool->running_task_names[thread_id], "[idle]", MAX_TASK_NAME_LEN - 1);
             pool->running_task_names[thread_id][MAX_TASK_NAME_LEN - 1] = '\0';
+            // 清除正在执行的任务ID
+            pool->running_task_ids[thread_id] = 0;
             // 标记线程为空闲状态
             pool->thread_status[thread_id] = 0; // 空闲
             pool->idle_threads++;
@@ -591,6 +596,7 @@ thread_pool_t thread_pool_create(int num_threads)
     pool->head = NULL;
     pool->tail = NULL;
     pool->task_queue_size = 0;
+    pool->next_task_id = 1;              // 初始化任务ID计数器，从1开始（0保留为无效ID）
 
     // 初始化自动调整相关字段
     pool->auto_adjust = 0;                 // 默认禁用自动调整
@@ -640,6 +646,19 @@ thread_pool_t thread_pool_create(int num_threads)
     pool->thread_status = (int *)calloc(num_threads, sizeof(int));
     if (pool->thread_status == NULL) {
         TPOOL_ERROR("未能为线程池 %p 的线程状态数组分配内存。", (void *)pool);
+        free(pool->threads);
+        pthread_mutex_destroy(&pool->resize_lock);
+        pthread_mutex_destroy(&pool->lock);
+        pthread_cond_destroy(&pool->notify);
+        free(pool);
+        return NULL;
+    }
+    
+    // 为运行中任务ID分配数组
+    pool->running_task_ids = (task_id_t *)calloc(num_threads, sizeof(task_id_t));
+    if (pool->running_task_ids == NULL) {
+        TPOOL_ERROR("未能为线程池 %p 的运行中任务ID数组分配内存。", (void *)pool);
+        free(pool->thread_status);
         free(pool->threads);
         pthread_mutex_destroy(&pool->resize_lock);
         pthread_mutex_destroy(&pool->lock);
@@ -706,6 +725,8 @@ thread_pool_t thread_pool_create(int num_threads)
                 }
             }
             free(pool->running_task_names);
+            free(pool->running_task_ids);
+            free(pool->thread_status);
             free(pool->threads);
             pthread_mutex_destroy(&pool->lock);
             pthread_cond_destroy(&pool->notify);
@@ -731,6 +752,8 @@ thread_pool_t thread_pool_create(int num_threads)
                 }
             }
             free(pool->running_task_names);
+            free(pool->running_task_ids);
+            free(pool->thread_status);
             free(pool->threads);
             pthread_mutex_destroy(&pool->lock);
             pthread_cond_destroy(&pool->notify);
@@ -755,16 +778,17 @@ thread_pool_t thread_pool_create(int num_threads)
  * @param task_name 任务的描述性名称。如果为 NULL，将使用 "unnamed_task"。
  *                  该名称被复制到任务结构中。
  * @param priority 任务的优先级，决定执行顺序。默认为 TASK_PRIORITY_NORMAL。
- * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
- *         池正在关闭，任务节点的内存分配失败)。
+ * @return 成功时返回分配的任务ID（大于0的值），错误时返回0（无效任务ID）。
+ *         错误情况包括：pool为NULL，function为NULL，池正在关闭，
+ *         任务节点的内存分配失败等。
  */
-int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg,
+task_id_t thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg,
                          const char *task_name, task_priority_t priority)
 {
     if (pool == NULL || function == NULL) {
         TPOOL_ERROR("thread_pool_add_task: 无效参数 (pool: %p, function: %p)", (void *)pool,
                     (void *)function);
-        return -1;
+        return 0; // 返回无效任务ID
     }
 
     pthread_mutex_lock(&(pool->lock));
@@ -772,7 +796,7 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
     if (pool->shutdown) {
         TPOOL_ERROR("thread_pool_add_task: 尝试向正在关闭的线程池 %p 添加任务", (void *)pool);
         pthread_mutex_unlock(&(pool->lock));
-        return -1;
+        return 0; // 返回无效任务ID
     }
 
     // 准备任务数据
@@ -780,6 +804,7 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
     task.function = function;
     task.arg = arg;
     task.priority = priority; // 设置任务优先级
+    task.id = pool->next_task_id++; // 分配唯一任务ID并递增计数器
 
     // 复制任务名称，确保不会超出缓冲区
     if (task_name == NULL) {
@@ -790,10 +815,14 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
     task.task_name[MAX_TASK_NAME_LEN - 1] = '\0'; // 确保以空字符结尾
 
     // 将任务添加到队列
+    task_id_t task_id = task.id; // 保存任务ID以便返回
     int result = task_enqueue_internal(pool, task);
     if (result == 0) {
         // 通知一个等待的工作线程有新任务
         pthread_cond_signal(&(pool->notify));
+    } else {
+        // 如果入队失败，返回无效任务ID
+        task_id = 0;
     }
 
     // 释放锁以避免死锁
@@ -806,8 +835,9 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
         pthread_mutex_unlock(&pool->adjust_cond_lock);
     }
 
-    TPOOL_DEBUG("任务 '%s' 已添加到线程池 %p。已通知工作线程。", task.task_name, (void *)pool);
-    return result;
+    TPOOL_DEBUG("任务 '%s' (ID: %lu) 已添加到线程池 %p。已通知工作线程。", 
+               task.task_name, (unsigned long)task_id, (void *)pool);
+    return task_id; // 返回分配的任务ID
 }
 
 /**
@@ -820,11 +850,12 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
  * @param arg 要传递给任务函数的参数。如果函数期望，可以为 NULL。
  * @param task_name 任务的描述性名称。如果为 NULL，将使用 "unnamed_task"。
  *                  该名称被复制到任务结构中。
- * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
- *         池正在关闭，任务节点的内存分配失败)。
+ * @return 成功时返回分配的任务ID（大于0的值），错误时返回0（无效任务ID）。
+ *         错误情况包括：pool为NULL，function为NULL，池正在关闭，
+ *         任务节点的内存分配失败等。
  */
-int thread_pool_add_task_default(thread_pool_t pool, void (*function)(void *), void *arg,
-                                const char *task_name)
+task_id_t thread_pool_add_task_default(thread_pool_t pool, void (*function)(void *), void *arg,
+                                 const char *task_name)
 {
     return thread_pool_add_task(pool, function, arg, task_name, TASK_PRIORITY_NORMAL);
 }
@@ -1667,4 +1698,137 @@ int thread_pool_disable_auto_adjust(thread_pool_t pool)
     TPOOL_LOG("线程池 %p 已禁用自动调整。", (void *)pool);
     pthread_mutex_unlock(&(pool->lock));
     return 0;
+}
+
+/**
+ * @brief 取消线程池中的任务
+ *
+ * 尝试取消指定ID的任务。如果任务已经开始执行，则无法取消。
+ * 如果任务成功取消，将调用取消回调函数（如果提供）。
+ *
+ * @param pool 指向线程池实例的指针
+ * @param task_id 要取消的任务ID
+ * @param cancel_callback 任务取消时的回调函数，可以为NULL
+ * @return 成功取消返回0，任务不存在或已开始执行返回-1，参数无效返回-2
+ */
+int thread_pool_cancel_task(thread_pool_t pool, task_id_t task_id, task_cancel_callback_t cancel_callback) {
+    if (pool == NULL || task_id == 0) {
+        TPOOL_ERROR("线程池为NULL或任务ID无效，无法取消任务。");
+        return -2; // 参数无效
+    }
+
+    // 获取锁以安全地访问任务队列
+    pthread_mutex_lock(&(pool->lock));
+
+    // 检查任务是否正在运行
+    for (int i = 0; i < pool->thread_count; i++) {
+        if (pool->running_task_ids[i] == task_id) {
+            // 任务正在运行，无法取消
+            pthread_mutex_unlock(&(pool->lock));
+            TPOOL_DEBUG("线程池 %p: 任务ID %lu 正在运行，无法取消。", (void *)pool, (unsigned long)task_id);
+            return -1;
+        }
+    }
+
+    // 在任务队列中查找任务
+    task_node_t *prev = NULL;
+    task_node_t *current = pool->head;
+
+    while (current != NULL) {
+        if (current->task.id == task_id) {
+            // 找到任务，从队列中移除
+            if (prev == NULL) {
+                // 任务在队列头部
+                pool->head = current->next;
+            } else {
+                // 任务在队列中间或尾部
+                prev->next = current->next;
+            }
+
+            // 如果是队列尾部的任务，更新尾指针
+            if (current->next == NULL) {
+                pool->tail = prev;
+            }
+
+            // 减少任务队列长度
+            pool->task_queue_size--;
+
+            // 保存任务信息以便在解锁后调用回调
+            void *task_arg = current->task.arg;
+            task_id_t canceled_task_id = current->task.id;
+
+            // 释放任务节点
+            free(current);
+
+            // 解锁
+            pthread_mutex_unlock(&(pool->lock));
+
+            // 调用取消回调（如果提供）
+            if (cancel_callback != NULL) {
+                cancel_callback(task_arg, canceled_task_id);
+            }
+
+            TPOOL_DEBUG("线程池 %p: 成功取消任务ID %lu。", (void *)pool, (unsigned long)canceled_task_id);
+            return 0;
+        }
+
+        // 移动到下一个节点
+        prev = current;
+        current = current->next;
+    }
+
+    // 任务不在队列中，也不在运行中
+    pthread_mutex_unlock(&(pool->lock));
+    TPOOL_DEBUG("线程池 %p: 任务ID %lu 不存在，无法取消。", (void *)pool, (unsigned long)task_id);
+    return -1;
+}
+
+/**
+ * @brief 检查任务是否存在于线程池中
+ *
+ * 检查指定ID的任务是否存在于线程池的队列中或正在执行。
+ *
+ * @param pool 指向线程池实例的指针
+ * @param task_id 要检查的任务ID
+ * @param is_running 如果不为NULL，将设置为1表示任务正在执行，0表示任务在队列中等待
+ * @return 任务存在返回1，任务不存在返回0，参数无效返回-1
+ */
+int thread_pool_task_exists(thread_pool_t pool, task_id_t task_id, int *is_running) {
+    if (pool == NULL || task_id == 0) {
+        TPOOL_ERROR("线程池为NULL或任务ID无效，无法检查任务。");
+        return -1; // 参数无效
+    }
+
+    // 获取锁以安全地访问任务队列和运行状态
+    pthread_mutex_lock(&(pool->lock));
+
+    // 首先检查任务是否正在运行
+    for (int i = 0; i < pool->thread_count; i++) {
+        if (pool->running_task_ids[i] == task_id) {
+            // 任务正在运行
+            if (is_running != NULL) {
+                *is_running = 1;
+            }
+            pthread_mutex_unlock(&(pool->lock));
+            return 1; // 任务存在且正在运行
+        }
+    }
+
+    // 在任务队列中查找任务
+    task_node_t *current = pool->head;
+    while (current != NULL) {
+        if (current->task.id == task_id) {
+            // 任务在队列中等待
+            if (is_running != NULL) {
+                *is_running = 0;
+            }
+            pthread_mutex_unlock(&(pool->lock));
+            return 1; // 任务存在但未运行
+        }
+        current = current->next;
+    }
+
+    // 任务不存在
+    pthread_mutex_unlock(&(pool->lock));
+    return 0; // 任务不存在
 }

@@ -11,6 +11,7 @@
 #include <pthread.h> // 用于 pthread_t，尽管现在是不透明结构的一部分。
 // 保留它是为了通用完整性，尽管如果所有 pthread 类型都隐藏在不透明 API 后面，
 // 则并非严格需要。
+#include <stdint.h> // 用于 uint64_t
 
 /**
  * @brief 任务名称的最大长度，包括空终止符。
@@ -82,6 +83,15 @@ typedef enum {
 } task_priority_t;
 
 /**
+ * @typedef task_id_t
+ * @brief 任务的唯一标识符类型。
+ *
+ * 用于标识和引用线程池中的特定任务，例如用于取消任务。
+ * 值0保留为无效任务ID。
+ */
+typedef uint64_t task_id_t;
+
+/**
  * @struct task_t
  * @brief 表示将由线程池执行的任务。
  *
@@ -92,6 +102,7 @@ typedef struct {
     void *arg;                   /**< 要传递给函数的参数。 */
     char task_name[MAX_TASK_NAME_LEN]; /**< 任务的名称，用于日志记录/监控。以空字符结尾。 */
     task_priority_t priority;    /**< 任务的优先级，决定执行顺序 */
+    task_id_t id;                /**< 任务的唯一标识符 */
 } task_t;
 
 /**
@@ -129,7 +140,7 @@ thread_pool_t thread_pool_create(int num_threads);
  * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
  *         池正在关闭，任务节点的内存分配失败)。
  */
-int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg,
+task_id_t thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg,
                          const char *task_name, task_priority_t priority);
 
 /**
@@ -145,8 +156,8 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
  * @return 成功时返回 0，错误时返回 -1 (例如，pool 为 NULL，function 为 NULL，
  *         池正在关闭，任务节点的内存分配失败)。
  */
-int thread_pool_add_task_default(thread_pool_t pool, void (*function)(void *), void *arg,
-                                const char *task_name);
+task_id_t thread_pool_add_task_default(thread_pool_t pool, void (*function)(void *), void *arg,
+                                 const char *task_name);
 
 /**
  * @brief 销毁线程池。
@@ -261,5 +272,41 @@ int thread_pool_enable_auto_adjust(thread_pool_t pool, int high_watermark, int l
  * @return 成功返回0，失败返回-1（例如，pool为NULL）
  */
 int thread_pool_disable_auto_adjust(thread_pool_t pool);
+
+/**
+ * @brief 任务取消回调函数类型
+ *
+ * 当任务被取消时，将调用此类型的回调函数。
+ * 回调函数接收被取消任务的参数和任务ID。
+ *
+ * @param arg 被取消任务的参数
+ * @param task_id 被取消任务的ID
+ */
+typedef void (*task_cancel_callback_t)(void *arg, task_id_t task_id);
+
+/**
+ * @brief 取消线程池中的任务
+ *
+ * 尝试取消指定ID的任务。如果任务已经开始执行，则无法取消。
+ * 如果任务成功取消，将调用取消回调函数（如果提供）。
+ *
+ * @param pool 指向线程池实例的指针
+ * @param task_id 要取消的任务ID
+ * @param cancel_callback 任务取消时的回调函数，可以为NULL
+ * @return 成功取消返回0，任务不存在或已开始执行返回-1，参数无效返回-2
+ */
+int thread_pool_cancel_task(thread_pool_t pool, task_id_t task_id, task_cancel_callback_t cancel_callback);
+
+/**
+ * @brief 检查任务是否存在于线程池中
+ *
+ * 检查指定ID的任务是否存在于线程池的队列中或正在执行。
+ *
+ * @param pool 指向线程池实例的指针
+ * @param task_id 要检查的任务ID
+ * @param is_running 如果不为NULL，将设置为1表示任务正在执行，0表示任务在队列中等待
+ * @return 任务存在返回1，任务不存在返回0，参数无效返回-1
+ */
+int thread_pool_task_exists(thread_pool_t pool, task_id_t task_id, int *is_running);
 
 #endif /* THREAD_H */

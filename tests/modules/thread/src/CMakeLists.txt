@@ -27,3 +27,15 @@ add_executable(thread_pool_test thread_pool_test.c)
 target_link_libraries(thread_pool_test PRIVATE thread)
 target_include_directories(thread_pool_test PRIVATE ${CMAKE_BINARY_DIR}/include)
 add_test(NAME ThreadPoolRandomTest COMMAND thread_pool_test)
+
+# 线程池任务优先级测试
+add_executable(thread_priority_test thread_priority_test.c)
+target_link_libraries(thread_priority_test PRIVATE thread)
+target_include_directories(thread_priority_test PRIVATE ${CMAKE_BINARY_DIR}/include)
+add_test(NAME ThreadPriorityTest COMMAND thread_priority_test)
+
+# 线程池任务取消测试
+add_executable(thread_cancel_test thread_cancel_test.c)
+target_link_libraries(thread_cancel_test PRIVATE thread)
+target_include_directories(thread_cancel_test PRIVATE ${CMAKE_BINARY_DIR}/include)
+add_test(NAME ThreadCancelTest COMMAND thread_cancel_test)
