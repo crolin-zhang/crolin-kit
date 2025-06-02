@@ -32,3 +32,13 @@ target_include_directories(thread_priority_example PRIVATE ${CMAKE_BINARY_DIR}/i
 add_executable(thread_cancel_example thread_cancel_example.c)
 target_link_libraries(thread_cancel_example PRIVATE thread)
 target_include_directories(thread_cancel_example PRIVATE ${CMAKE_BINARY_DIR}/include)
+
+# 线程池任务名称查找和取消示例
+add_executable(thread_task_name_cancel_example thread_task_name_cancel_example.c)
+target_link_libraries(thread_task_name_cancel_example PRIVATE thread)
+target_include_directories(thread_task_name_cancel_example PRIVATE ${CMAKE_BINARY_DIR}/include)
+
+# 未命名任务自动生成唯一名称测试示例
+add_executable(thread_unnamed_tasks_example thread_unnamed_tasks_example.c)
+target_link_libraries(thread_unnamed_tasks_example PRIVATE thread)
+target_include_directories(thread_unnamed_tasks_example PRIVATE ${CMAKE_BINARY_DIR}/include)
