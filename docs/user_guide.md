@@ -510,6 +510,60 @@ int main() {
 
 ## 高级用法
 
+### 任务命名和识别
+
+线程池库支持任务命名，这使得可以跟踪、查找和取消特定任务。任务命名的主要功能包括：
+
+#### 1. 命名任务
+
+在添加任务时，可以为任务指定一个描述性名称：
+
+```c
+thread_pool_add_task(pool, my_task, arg, "data_processing_task", TASK_PRIORITY_NORMAL);
+```
+
+#### 2. 未命名任务的自动命名
+
+从版本1.2.0开始，当添加未命名任务（传递NULL作为任务名称）时，线程池将自动生成一个唯一的名称：
+
+```c
+// 添加未命名任务，将自动生成格式为"unnamed_task_{task_id}"的唯一名称
+thread_pool_add_task(pool, my_task, arg, NULL, TASK_PRIORITY_NORMAL);
+```
+
+自动生成的名称格式为`"unnamed_task_{task_id}"`，其中`{task_id}`是任务的唯一标识符。这个功能在以下场景特别有用：
+
+- 当你不需要显式命名每个任务，但仍需要在日志或状态报告中识别它们
+- 当你需要在不知道确切名称的情况下取消任务
+- 当你需要跟踪大量自动生成的任务
+
+#### 3. 通过名称查找任务
+
+可以使用`thread_pool_find_task_by_name`函数根据名称查找任务：
+
+```c
+int is_queued;
+int task_found = thread_pool_find_task_by_name(pool, "data_processing_task", &is_queued);
+if (task_found) {
+    printf("找到任务，%s\n", is_queued ? "任务在队列中" : "任务正在运行");
+}
+
+// 也可以查找自动生成名称的任务
+int unnamed_task_found = thread_pool_find_task_by_name(pool, "unnamed_task_42", &is_queued);
+```
+
+#### 4. 通过名称取消任务
+
+可以使用`thread_pool_cancel_task`函数通过名称取消任务：
+
+```c
+int cancelled = thread_pool_cancel_task(pool, "data_processing_task", cancel_callback);
+printf("取消任务%s\n", cancelled ? "成功" : "失败");
+
+// 也可以取消自动生成名称的任务
+int unnamed_cancelled = thread_pool_cancel_task(pool, "unnamed_task_42", cancel_callback);
+```
+
 ### 任务参数管理
 
 在线程池中，任务参数的内存管理非常重要。有几种常见的参数传递方式：

@@ -97,7 +97,7 @@ int thread_pool_add_task(thread_pool_t pool, void (*function)(void *), void *arg
 - `pool`: 指向`thread_pool_t`实例的指针。
 - `function`: 指向定义任务的函数的指针。不能为空。
 - `arg`: 要传递给任务函数的参数。如果函数期望，可以为`NULL`。
-- `task_name`: 任务的描述性名称。如果为`NULL`，将使用"unnamed_task"。该名称被复制到任务结构中。
+- `task_name`: 任务的描述性名称。如果为`NULL`，将自动生成格式为"unnamed_task_{task_id}"的唯一名称，其中{task_id}是任务的唯一标识符。该名称被复制到任务结构中。
 - `priority`: 任务的优先级。可以是`TASK_PRIORITY_HIGH`、`TASK_PRIORITY_NORMAL`、`TASK_PRIORITY_LOW`或`TASK_PRIORITY_BACKGROUND`。
 
 **返回值**:
@@ -135,6 +135,28 @@ int *arg3 = malloc(sizeof(int));
 if (thread_pool_add_task(pool, my_task, arg3, "Background-Task", TASK_PRIORITY_BACKGROUND) != 0) {
     fprintf(stderr, "添加后台任务失败\n");
     free(arg3);
+}
+
+// 添加未命名任务，将自动生成唯一名称
+int *arg4 = malloc(sizeof(int));
+*arg4 = 4;
+if (thread_pool_add_task(pool, my_task, arg4, NULL, TASK_PRIORITY_NORMAL) != 0) {
+    fprintf(stderr, "添加未命名任务失败\n");
+    free(arg4);
+}
+
+// 通过thread_pool_find_task_by_name查找自动生成名称的任务
+thread_pool_status_t status;
+thread_pool_get_status(pool, &status);
+printf("任务队列中有 %d 个任务\n", status.queued_tasks);
+
+// 打印所有运行中的任务名称，包括自动生成的名称
+char **running_tasks = thread_pool_get_running_task_names(pool);
+if (running_tasks) {
+    for (int i = 0; i < status.active_threads; i++) {
+        printf("线程 %d: %s\n", i, running_tasks[i] ? running_tasks[i] : "(no task)");
+    }
+    thread_pool_free_task_names(running_tasks);
 }
 ```
 
